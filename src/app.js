@@ -16,6 +16,7 @@ const app = express();
 nunjucks.configure(path.join(__dirname, 'views'), {
     autoescape: true,
     express: app,
+    noCache: process.env.NODE_ENV !== 'production',
 });
 
 app.set('view engine', 'njk');
