@@ -1,0 +1,12 @@
+{
+  "name": "slack-channel-panel",
+  "version": "0.0.1",
+  "description": "A dashboard to aid maintenance of dxw slack channels",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "dxw",
+  "license": "MIT"
+}
