@@ -128,7 +128,11 @@ export const registerAuthRoutes = (app, oidcConfig) => {
 			const claims = tokens.claims();
 			const email = claims?.email;
 
-			if (!isAllowedEmail(email)) {
+			if (
+				!isAllowedEmail(email) ||
+				claims?.email_verified !== true ||
+				claims?.hd !== ALLOWED_EMAIL_DOMAIN
+			) {
 				req.session.destroy(() => {});
 				return res
 					.status(403)
