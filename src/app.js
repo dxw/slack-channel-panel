@@ -7,6 +7,7 @@ import {
 	buildOidcConfig,
 	registerAuthRoutes,
 	requireAuth,
+	registerDevAuthRoutes,
 } from './auth/index.js';
 
 // Routes
@@ -18,6 +19,8 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
+
 app.use(
 	session({
 		secret: process.env.SESSION_SECRET,
@@ -27,6 +30,7 @@ app.use(
 			httpOnly: true,
 			secure: process.env.NODE_ENV === 'production',
 			sameSite: 'lax',
+			maxAge: SESSION_MAX_AGE_MS,
 		},
 	}),
 );
@@ -47,6 +51,16 @@ app.use(express.json());
 const oidcConfig = await buildOidcConfig();
 if (oidcConfig) {
 	registerAuthRoutes(app, oidcConfig);
+} else if (
+	process.env.DEV_AUTH === 'true' &&
+	process.env.NODE_ENV !== 'production'
+) {
+	console.warn('Development login enabled');
+	registerDevAuthRoutes(app);
+} else {
+	throw new Error(
+		'No login method configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, or DEV_AUTH=true for local development.',
+	);
 }
 
 // Static assets

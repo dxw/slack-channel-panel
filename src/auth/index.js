@@ -15,19 +15,28 @@ export const isAllowedEmail = (email) => {
 
 /**
  * Discovers the Google OpenID Connect configuration and builds the client config.
- * Returns null if GOOGLE_CLIENT_ID is not set (e.g. in test environments).
+ * Returns null if Google login is not configured (GOOGLE_CLIENT_ID unset).
+ * Throws if it is only partly configured.
  * @returns {Promise<openidClient.Configuration|null>}
  */
 export const buildOidcConfig = async () => {
 	if (!process.env.GOOGLE_CLIENT_ID) {
 		return null;
 	}
-	const config = await openidClient.discovery(
+
+	const required = ['GOOGLE_CLIENT_SECRET', 'BASE_URL'];
+	const missing = required.filter((name) => !process.env[name]);
+	if (missing.length > 0) {
+		throw new Error(
+			`GOOGLE_CLIENT_ID is set but these are missing: ${missing.join(', ')}`,
+		);
+	}
+
+	return openidClient.discovery(
 		new URL(GOOGLE_ISSUER),
 		process.env.GOOGLE_CLIENT_ID,
 		process.env.GOOGLE_CLIENT_SECRET,
 	);
-	return config;
 };
 
 /**
@@ -41,8 +50,23 @@ export const requireAuth = (req, res, next) => {
 	if (req.session?.user) {
 		return next();
 	}
-	req.session.returnTo = req.originalUrl;
 	return res.redirect('/auth/login');
+};
+
+/**
+ * Registers logout routes shared by Google and dev login.
+ * @param {import("express").Express} app
+ */
+const registerLogoutRoutes = (app) => {
+	app.post('/auth/logout', (req, res, next) => {
+		req.session.destroy((err) => {
+			if (err) return next(err);
+			res.clearCookie('connect.sid');
+			res.redirect('/auth/signed-out');
+		});
+	});
+
+	app.get('/auth/signed-out', (req, res) => res.render('signed-out'));
 };
 
 /**
@@ -51,34 +75,37 @@ export const requireAuth = (req, res, next) => {
  * @param {openidClient.Configuration} oidcConfig
  */
 export const registerAuthRoutes = (app, oidcConfig) => {
-	app.get('/auth/login', (req, res) => {
+	app.get('/auth/login', async (req, res) => {
 		const state = openidClient.randomState();
 		const nonce = openidClient.randomNonce();
 		const codeVerifier = openidClient.randomPKCECodeVerifier();
 
 		req.session.oidc = {state, nonce, codeVerifier};
 
-		openidClient
-			.calculatePKCECodeChallenge(codeVerifier)
-			.then((codeChallenge) => {
-				const redirectUri = `${process.env.BASE_URL}/auth/callback`;
+		const codeChallenge =
+			await openidClient.calculatePKCECodeChallenge(codeVerifier);
 
-				const authUrl = openidClient.buildAuthorizationUrl(oidcConfig, {
-					redirect_uri: redirectUri,
-					response_type: 'code',
-					scope: 'openid email',
-					state,
-					nonce,
-					code_challenge: codeChallenge,
-					code_challenge_method: 'S256',
-				});
+		const authUrl = openidClient.buildAuthorizationUrl(oidcConfig, {
+			redirect_uri: `${process.env.BASE_URL}/auth/callback`,
+			response_type: 'code',
+			scope: 'openid email',
+			state,
+			nonce,
+			code_challenge: codeChallenge,
+			code_challenge_method: 'S256',
+		});
 
-				return res.redirect(authUrl.href);
-			});
+		return res.redirect(authUrl.href);
 	});
 
 	app.get('/auth/callback', async (req, res) => {
 		try {
+			if (req.query.error) {
+				req.session.oidc = null;
+				return res
+					.status(401)
+					.send('Sign-in was cancelled. <a href="/auth/login">Try again</a>.');
+			}
 			const {state, nonce, codeVerifier} = req.session.oidc ?? {};
 
 			if (!state || !nonce || !codeVerifier) {
@@ -111,19 +138,47 @@ export const registerAuthRoutes = (app, oidcConfig) => {
 			req.session.oidc = null;
 			req.session.user = {email};
 
-			const returnTo = req.session.returnTo ?? '/';
-			req.session.returnTo = null;
-
-			return res.redirect(returnTo);
+			return res.redirect('/');
 		} catch (err) {
 			console.error('Auth callback error:', err);
 			return res.status(500).send('Authentication failed. Please try again.');
 		}
 	});
 
-	app.get('/auth/logout', (req, res) => {
-		req.session.destroy(() => {
-			res.redirect('/');
-		});
+	registerLogoutRoutes(app);
+};
+
+/**
+ * Registers the authentication routes to use when OIDC is not configured
+ * (e.g. in test environments). Must not be used in production.
+ * @param {import("express").Express} app
+ */
+export const registerDevAuthRoutes = (app) => {
+	// Provide a login form that accepts any allowed email address, so that
+	// requireAuth redirects land somewhere usable.
+	app.get('/auth/login', (req, res) => res.render('login'));
+
+	app.post('/auth/login', (req, res) => {
+		const {email} = req.body ?? {};
+		if (!isAllowedEmail(email)) {
+			return res
+				.status(400)
+				.send(`A valid @${ALLOWED_EMAIL_DOMAIN} email is required.`);
+		}
+		req.session.user = {email};
+
+		return res.redirect('/');
 	});
+
+	registerLogoutRoutes(app);
+
+	// Test-only endpoint: creates an authenticated session without going through Google SSO.
+	//   app.post("/test/session", express.json(), (req, res) => {
+	//     const { email } = req.body ?? {};
+	//     if (!isAllowedEmail(email)) {
+	//       return res.status(400).json({ error: `A valid @${ALLOWED_EMAIL_DOMAIN} email is required.` });
+	//     }
+	//     req.session.user = { email };
+	//     return res.status(201).json({ email });
+	//   });
 };
