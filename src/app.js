@@ -1,6 +1,7 @@
 import express from 'express';
 import nunjucks from 'nunjucks';
 import session from 'express-session';
+import createMemoryStore from 'memorystore';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {
@@ -19,10 +20,17 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+app.set('trust proxy', 1);
+
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
+const MemoryStore = createMemoryStore(session);
 
 app.use(
 	session({
+		store: new MemoryStore({
+			checkPeriod: 60 * 60 * 1000, // remove expired sessions every hour
+			max: 1000,
+		}),
 		secret: process.env.SESSION_SECRET,
 		resave: false,
 		saveUninitialized: false,

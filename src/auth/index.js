@@ -139,7 +139,7 @@ export const registerAuthRoutes = (app, oidcConfig) => {
 					.send('Access denied. Only @dxw.com accounts are permitted.');
 			}
 
-			req.session.oidc = null;
+			await regenerateSession(req);
 			req.session.user = {email};
 
 			return res.redirect('/');
@@ -151,6 +151,17 @@ export const registerAuthRoutes = (app, oidcConfig) => {
 
 	registerLogoutRoutes(app);
 };
+
+/**
+ * Replaces the current session with a new one (new ID, empty data).
+ * Call on login to prevent session fixation.
+ * @param {import("express").Request} req
+ * @returns {Promise<void>}
+ */
+const regenerateSession = (req) =>
+	new Promise((resolve, reject) => {
+		req.session.regenerate((err) => (err ? reject(err) : resolve()));
+	});
 
 /**
  * Registers the authentication routes to use when OIDC is not configured
