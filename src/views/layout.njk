@@ -21,14 +21,11 @@
                 <a href="/" class="hover:text-gray-600">Slack Channel Panel</a>
             </h1>
             {% if user %}
-            <div class="flex items-center gap-4">
-                <span class="hidden text-sm text-gray-600 sm:inline">{{ user.email }}</span>
-                <form method="post" action="/auth/logout">
-                    <button class="cursor-pointer rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-100 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900">
-                        Sign out
-                    </button>
-                </form>
-            </div>
+            <form method="post" action="/auth/logout">
+                <button class="cursor-pointer rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-100 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900">
+                    Sign out
+                </button>
+            </form>
             {% endif %}
         </div>
     </header>
