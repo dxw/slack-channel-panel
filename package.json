@@ -6,7 +6,10 @@
 	"main": "index.js",
 	"scripts": {
 		"start": "node --env-file-if-exists=.env src/server.js",
-		"dev": "nodemon --env-file=.env src/server.js",
+		"dev": "npm run watch:css & nodemon --env-file=.env src/server.js",
+		"build": "npm run build:css",
+		"build:css": "tailwindcss -i src/main.css -o src/public/styles.css --minify",
+		"watch:css": "tailwindcss -i src/main.css -o src/public/styles.css --watch=always",
 		"test": "node --test",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
@@ -26,10 +29,12 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
+		"@tailwindcss/cli": "^4.3.5",
 		"eslint": "^10.14.0",
 		"eslint-config-prettier": "^10.1.8",
 		"globals": "^17.14.0",
 		"nodemon": "^3.1.14",
-		"prettier": "^3.9.10"
+		"prettier": "^3.9.10",
+		"tailwindcss": "^4.3.5"
 	}
 }

@@ -1,0 +1,4 @@
+@import 'tailwindcss';
+
+/* Make sure Tailwind scans the Nunjucks templates for class names. */
+@source './views';
