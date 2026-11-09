@@ -5,9 +5,9 @@
 	"type": "module",
 	"main": "index.js",
 	"scripts": {
-		"start": "node  --env-file-if-exists=.env src/server.js",
+		"start": "node --env-file-if-exists=.env src/server.js",
 		"dev": "nodemon --env-file=.env src/server.js",
-		"test": "echo \"Error: no test specified\" && exit 1",
+		"test": "node --test",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
 		"format": "prettier --write ."

@@ -4,6 +4,17 @@ const ALLOWED_EMAIL_DOMAIN = 'dxw.com';
 const GOOGLE_ISSUER = 'https://accounts.google.com';
 
 /**
+ * Returns true if the ID token claims belong to a verified user in the allowed
+ * Google Workspace domain.
+ * @param {Record<string, unknown> | undefined} claims
+ * @returns {boolean}
+ */
+export const isAuthorisedClaims = (claims) =>
+	isAllowedEmail(claims?.email) &&
+	claims?.email_verified === true &&
+	claims?.hd === ALLOWED_EMAIL_DOMAIN;
+
+/**
  * Returns true if the given email belongs to the allowed domain.
  * @param {string} email
  * @returns {boolean}
@@ -129,11 +140,7 @@ export const registerAuthRoutes = (app, oidcConfig) => {
 			const claims = tokens.claims();
 			const email = claims?.email;
 
-			if (
-				!isAllowedEmail(email) ||
-				claims?.email_verified !== true ||
-				claims?.hd !== ALLOWED_EMAIL_DOMAIN
-			) {
+			if (!isAuthorisedClaims(claims)) {
 				req.session.destroy(() => {});
 				return res
 					.status(403)
