@@ -26,6 +26,15 @@ mock.method(globalThis, 'fetch', async (url, options) =>
 						purpose: {value: 'A channel for tests'},
 						created: 1_600_000_000,
 					},
+					{
+						id: 'C456',
+						name: 'old-channel',
+						is_archived: true,
+						num_members: 0,
+						topic: {value: ''},
+						purpose: {value: 'An archived channel for tests'},
+						created: 1_500_000_000,
+					},
 				],
 				response_metadata: {next_cursor: ''},
 			})
@@ -115,13 +124,23 @@ describe('when signed in', () => {
 		({cookie} = await login('test@dxw.com'));
 	});
 
-	it('shows the Slack channels', async () => {
+	it('shows active channels by default', async () => {
 		const res = await get('/', cookie);
 		const html = await res.text();
 
 		assert.equal(res.status, 200);
 		assert.ok(html.includes('#test-channel'));
+		assert.ok(!html.includes('#old-channel'));
 		assert.ok(html.includes('Sign out'));
+	});
+
+	it('shows archived channels', async () => {
+		const res = await get('/?status=archived', cookie);
+		const html = await res.text();
+
+		assert.equal(res.status, 200);
+		assert.ok(html.includes('#old-channel'));
+		assert.ok(!html.includes('#test-channel'));
 	});
 });
 
