@@ -15,9 +15,11 @@
 
     <header>
         <h1>Slack Channel Panel</h1>
+        {% if user %}
         <form method="post" action="/auth/logout">
             <button>Sign out</button>
         </form>
+        {% endif %}
     </header>
 
     <main>

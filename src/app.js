@@ -29,7 +29,6 @@ app.use(
 	session({
 		store: new MemoryStore({
 			checkPeriod: 60 * 60 * 1000, // remove expired sessions every hour
-			max: 1000,
 		}),
 		secret: process.env.SESSION_SECRET,
 		resave: false,
