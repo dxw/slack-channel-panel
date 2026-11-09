@@ -3,10 +3,10 @@ import express from 'express';
 const router = express.Router();
 
 router.get('/', (req, res) => {
-    res.render('index', {
-        title: 'Home',
-        message: 'Homepage running OK',
-    });
+	res.render('index', {
+		title: 'Home',
+		message: 'Homepage running OK',
+	});
 });
 
 export default router;
