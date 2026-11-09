@@ -4,6 +4,43 @@
 
 {% block content %}
 
-    <p>Welcome to the application.</p>
+    {% if error %}
+        <div class="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
+            {{ error }}
+        </div>
+    {% else %}
+        <div class="flex items-baseline justify-between">
+            <h2 class="text-lg font-semibold">{{ channels | length }} channels</h2>
+            <p class="text-sm text-gray-500">Last updated {{ fetchedAt.toLocaleString('en-GB') }}</p>
+        </div>
+
+        <div class="mt-4 overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
+            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                <thead class="bg-gray-50 text-left font-medium text-gray-600">
+                    <tr>
+                        <th scope="col" class="px-4 py-3">Name</th>
+                        <th scope="col" class="px-4 py-3 text-right">Members</th>
+                        <th scope="col" class="px-4 py-3">Purpose</th>
+                        <th scope="col" class="px-4 py-3">Created</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for channel in channels %}
+                        <tr>
+                            <td class="px-4 py-3 font-medium whitespace-nowrap">
+                                #{{ channel.name }}
+                                {% if channel.isArchived %}
+                                    <span class="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-normal text-gray-600">Archived</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-right tabular-nums">{{ channel.memberCount }}</td>
+                            <td class="px-4 py-3 text-gray-600">{{ channel.purpose }}</td>
+                            <td class="px-4 py-3 whitespace-nowrap text-gray-600">{{ channel.created.toLocaleDateString('en-GB') }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
 
 {% endblock %}

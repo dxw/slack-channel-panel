@@ -1,4 +1,4 @@
-import {describe, it, before, after} from 'node:test';
+import {describe, it, before, after, mock} from 'node:test';
 import assert from 'node:assert/strict';
 
 // Set test env variables. Use the development login (no Google client ID).
@@ -7,7 +7,30 @@ Object.assign(process.env, {
 	DEV_AUTH: 'true',
 	SESSION_SECRET: 'test-session-secret',
 	GOOGLE_CLIENT_ID: '',
+	SLACK_BOT_TOKEN: 'xoxb-test',
 });
+
+// Fake the Slack API. Other requests (to the test server) use the real fetch.
+const realFetch = globalThis.fetch;
+mock.method(globalThis, 'fetch', async (url, options) =>
+	String(url).startsWith('https://slack.com/')
+		? Response.json({
+				ok: true,
+				channels: [
+					{
+						id: 'C123',
+						name: 'test-channel',
+						is_archived: false,
+						num_members: 3,
+						topic: {value: ''},
+						purpose: {value: 'A channel for tests'},
+						created: 1_600_000_000,
+					},
+				],
+				response_metadata: {next_cursor: ''},
+			})
+		: realFetch(url, options),
+);
 
 const {default: app} = await import('./app.js');
 
@@ -92,12 +115,12 @@ describe('when signed in', () => {
 		({cookie} = await login('test@dxw.com'));
 	});
 
-	it('shows the homepage', async () => {
+	it('shows the Slack channels', async () => {
 		const res = await get('/', cookie);
 		const html = await res.text();
 
 		assert.equal(res.status, 200);
-		assert.ok(html.includes('Welcome to the application.'));
+		assert.ok(html.includes('#test-channel'));
 		assert.ok(html.includes('Sign out'));
 	});
 });
