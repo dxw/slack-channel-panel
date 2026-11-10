@@ -9,6 +9,12 @@
             {{ error }}
         </div>
     {% else %}
+        {% if refreshing %}
+            <div class="mb-4 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800" role="status">
+                Checking channel activity… {{ progress.done }} of {{ progress.total }}
+            </div>
+        {% endif %}
+
         <div class="flex flex-wrap items-end justify-between gap-2 border-b border-gray-200">
             <nav aria-label="Channel status" class="-mb-px flex gap-4">
                 {% for tab in [
@@ -24,7 +30,9 @@
                     </a>
                 {% endfor %}
             </nav>
-            <p class="pb-3 text-sm text-gray-500">Last updated {{ fetchedAt.toLocaleString('en-GB') }}</p>
+            {% if refreshedAt %}
+                <p class="pb-3 text-sm text-gray-500">Last updated {{ refreshedAt.toLocaleString('en-GB') }}</p>
+            {% endif %}
         </div>
 
         <div class="mt-4 overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -33,8 +41,10 @@
                     <tr>
                         <th scope="col" class="px-4 py-3">Name</th>
                         <th scope="col" class="px-4 py-3 text-right">Members</th>
-                        <th scope="col" class="px-4 py-3">Purpose</th>
-                        <th scope="col" class="px-4 py-3">Created</th>
+                        <th scope="col" class="px-4 py-3">Description</th>
+                        <th scope="col" class="px-4 py-3">Last message</th>
+                        <th scope="col" class="px-4 py-3 text-right">Messages (7 days)</th>
+                        <th scope="col" class="px-4 py-3">Status</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200">
@@ -43,11 +53,40 @@
                             <td class="px-4 py-3 font-medium whitespace-nowrap">#{{ channel.name }}</td>
                             <td class="px-4 py-3 text-right tabular-nums">{{ channel.memberCount }}</td>
                             <td class="px-4 py-3 text-gray-600">{{ channel.purpose }}</td>
-                            <td class="px-4 py-3 whitespace-nowrap text-gray-600">{{ channel.created.toLocaleDateString('en-GB') }}</td>
+                            <td class="px-4 py-3 whitespace-nowrap text-gray-600">
+                                {% if not channel.activity %}
+                                    —
+                                {% elif channel.activity.lastMessageAt %}
+                                    {{ channel.activity.lastMessageAt.toLocaleDateString('en-GB') }}
+                                {% else %}
+                                    No messages
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-right tabular-nums">
+                                {% if not channel.activity %}
+                                    —
+                                {% elif channel.activity.messagesLastWeek >= 100 %}
+                                    100+
+                                {% else %}
+                                    {{ channel.activity.messagesLastWeek }}
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                {# The Archive button for inactive channels will go here. #}
+                                {% if channel.isArchived %}
+                                    <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">Archived</span>
+                                {% elif channel.inactive %}
+                                    <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Inactive</span>
+                                {% elif channel.activity %}
+                                    <span class="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800">Active</span>
+                                {% else %}
+                                    <span class="text-xs text-gray-500">Not checked yet</span>
+                                {% endif %}
+                            </td>
                         </tr>
                     {% else %}
                         <tr>
-                            <td colspan="4" class="px-4 py-6 text-center text-gray-500">No {{ status }} channels.</td>
+                            <td colspan="6" class="px-4 py-6 text-center text-gray-500">No {{ status }} channels.</td>
                         </tr>
                     {% endfor %}
                 </tbody>

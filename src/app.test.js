@@ -11,35 +11,67 @@ Object.assign(process.env, {
 });
 
 // Fake the Slack API. Other requests (to the test server) use the real fetch.
+const DAY_SECONDS = 24 * 60 * 60;
+const nowSeconds = Date.now() / 1000;
+const slackResponses = {
+	'conversations.list': {
+		channels: [
+			{
+				id: 'C123',
+				name: 'test-channel',
+				is_archived: false,
+				is_member: true,
+				num_members: 3,
+				topic: {value: ''},
+				purpose: {value: 'A channel for tests'},
+				created: 1_600_000_000,
+			},
+			{
+				id: 'C789',
+				name: 'quiet-channel',
+				is_archived: false,
+				is_member: true,
+				num_members: 3,
+				topic: {value: ''},
+				purpose: {value: 'Nobody posts here'},
+				created: 1_600_000_000,
+			},
+			{
+				id: 'C456',
+				name: 'old-channel',
+				is_archived: true,
+				num_members: 0,
+				topic: {value: ''},
+				purpose: {value: 'An archived channel for tests'},
+				created: 1_500_000_000,
+			},
+		],
+		response_metadata: {next_cursor: ''},
+	},
+	'conversations.history C123': {
+		messages: [
+			{type: 'message', user: 'U1', ts: String(nowSeconds - DAY_SECONDS)},
+		],
+	},
+	'conversations.history C789': {
+		messages: [
+			{type: 'message', user: 'U1', ts: String(nowSeconds - 30 * DAY_SECONDS)},
+		],
+	},
+};
 const realFetch = globalThis.fetch;
-mock.method(globalThis, 'fetch', async (url, options) =>
-	String(url).startsWith('https://slack.com/')
-		? Response.json({
-				ok: true,
-				channels: [
-					{
-						id: 'C123',
-						name: 'test-channel',
-						is_archived: false,
-						num_members: 3,
-						topic: {value: ''},
-						purpose: {value: 'A channel for tests'},
-						created: 1_600_000_000,
-					},
-					{
-						id: 'C456',
-						name: 'old-channel',
-						is_archived: true,
-						num_members: 0,
-						topic: {value: ''},
-						purpose: {value: 'An archived channel for tests'},
-						created: 1_500_000_000,
-					},
-				],
-				response_metadata: {next_cursor: ''},
-			})
-		: realFetch(url, options),
-);
+mock.method(globalThis, 'fetch', async (url, options) => {
+	if (!String(url).startsWith('https://slack.com/')) {
+		return realFetch(url, options);
+	}
+	const method = url.pathname.replace('/api/', '');
+	const channel = url.searchParams.get('channel');
+	const body = slackResponses[channel ? `${method} ${channel}` : method];
+	return Response.json({ok: true, ...body});
+});
+
+const {refreshChannels} = await import('./slack/index.js');
+await refreshChannels({token: 'xoxb-test', pauseMs: 0});
 
 const {default: app} = await import('./app.js');
 
@@ -132,6 +164,21 @@ describe('when signed in', () => {
 		assert.ok(html.includes('#test-channel'));
 		assert.ok(!html.includes('#old-channel'));
 		assert.ok(html.includes('Sign out'));
+	});
+
+	it('shows when each channel last had a message', async () => {
+		const html = await (await get('/', cookie)).text();
+		const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+		assert.ok(html.includes(yesterday.toLocaleDateString('en-GB')));
+	});
+
+	it('marks channels with no messages in 7 days as inactive', async () => {
+		const html = await (await get('/', cookie)).text();
+		const rowFor = (name) => html.split(`#${name}`)[1].split('</tr>')[0];
+
+		assert.ok(rowFor('quiet-channel').includes('Inactive'));
+		assert.ok(!rowFor('test-channel').includes('Inactive'));
 	});
 
 	it('shows archived channels', async () => {
