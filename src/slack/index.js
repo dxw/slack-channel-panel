@@ -80,6 +80,7 @@ export const refreshChannels = async ({
 				state.activity.set(channel.id, summariseActivity(messages, now()));
 			} catch (error) {
 				// Keep going: one channel failing shouldn't stop the rest.
+				state.activity.delete(channel.id);
 				console.error(`Couldn’t check #${channel.name}: ${error.message}`);
 			}
 			state.progress.done += 1;
