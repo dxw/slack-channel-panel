@@ -11,48 +11,55 @@ Object.assign(process.env, {
 });
 
 // Fake the Slack API. Other requests (to the test server) use the real fetch.
+// Set `slackFails` to true to make Slack return an error.
+let slackFails = false;
 const realFetch = globalThis.fetch;
 mock.method(globalThis, 'fetch', async (url, options) =>
 	String(url).startsWith('https://slack.com/')
-		? Response.json({
-				ok: true,
-				channels: [
-					{
-						id: 'C123',
-						name: 'test-channel',
-						is_archived: false,
-						num_members: 3,
-						topic: {value: ''},
-						purpose: {value: 'A channel for tests'},
-						created: 1_600_000_000,
-					},
-					{
-						id: 'C456',
-						name: 'old-channel',
-						is_archived: true,
-						num_members: 0,
-						topic: {value: ''},
-						purpose: {value: 'An archived channel for tests'},
-						created: 1_500_000_000,
-					},
-					// 30 more active channels, sorted after #test-channel, so
-					// there are 31 active channels across 2 pages.
-					...Array.from({length: 30}, (_, i) => ({
-						id: `CZ${i}`,
-						name: `zz-channel-${String(i).padStart(2, '0')}`,
-						is_archived: false,
-						num_members: 1,
-						topic: {value: ''},
-						purpose: {value: ''},
-						created: 1_600_000_000,
-					})),
-				],
-				response_metadata: {next_cursor: ''},
-			})
+		? Response.json(
+				slackFails
+					? {ok: false, error: 'invalid_auth'}
+					: {
+							ok: true,
+							channels: [
+								{
+									id: 'C123',
+									name: 'test-channel',
+									is_archived: false,
+									num_members: 3,
+									topic: {value: ''},
+									purpose: {value: 'A channel for tests'},
+									created: 1_600_000_000,
+								},
+								{
+									id: 'C456',
+									name: 'old-channel',
+									is_archived: true,
+									num_members: 0,
+									topic: {value: ''},
+									purpose: {value: 'An archived channel for tests'},
+									created: 1_500_000_000,
+								},
+								// 30 more active channels, sorted after #test-channel, so
+								// there are 31 active channels across 2 pages.
+								...Array.from({length: 30}, (_, i) => ({
+									id: `CZ${i}`,
+									name: `zz-channel-${String(i).padStart(2, '0')}`,
+									is_archived: false,
+									num_members: 1,
+									topic: {value: ''},
+									purpose: {value: ''},
+									created: 1_600_000_000,
+								})),
+							],
+							response_metadata: {next_cursor: ''},
+						},
+			)
 		: realFetch(url, options),
 );
 
 const {default: app} = await import('./app.js');
+const {clearChannelCache} = await import('./slack/index.js');
 
 let server;
 let baseUrl;
@@ -170,6 +177,30 @@ describe('when signed in', () => {
 		assert.ok(html.includes('#zz-channel-29'));
 		assert.ok(!html.includes('#test-channel'));
 		assert.ok(html.includes('href="/"'));
+	});
+});
+
+describe('when Slack fails', () => {
+	let cookie;
+
+	before(async () => {
+		({cookie} = await login('test@dxw.com'));
+		slackFails = true;
+		clearChannelCache();
+	});
+
+	after(() => {
+		slackFails = false;
+		clearChannelCache();
+	});
+
+	it('shows an error with a 502 status', async () => {
+		const res = await get('/', cookie);
+
+		assert.equal(res.status, 502);
+		assert.ok(
+			(await res.text()).includes('Couldn’t load channels from Slack.'),
+		);
 	});
 });
 

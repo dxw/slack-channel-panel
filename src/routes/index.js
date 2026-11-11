@@ -56,7 +56,10 @@ router.get('/', async (req, res) => {
 		});
 	} catch (error) {
 		console.error(error.message);
-		res.render('index', {error: 'Couldn’t load channels from Slack.'});
+		// 502 Bad Gateway: the page failed because Slack, which we depend on, did.
+		res
+			.status(502)
+			.render('index', {error: 'Couldn’t load channels from Slack.'});
 	}
 });
 
