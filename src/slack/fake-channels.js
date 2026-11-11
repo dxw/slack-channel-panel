@@ -37,6 +37,9 @@ export const fakeChannels = names.map((name, i) => ({
 	topic: {value: ''},
 	purpose: {value: `A made-up channel for ${name.replaceAll('-', ' ')}`},
 	created: NOW_SECONDS - (i + 1) * 90 * DAY_SECONDS,
+	// When the channel's settings last changed, in ms. For archived channels,
+	// this is when they were archived.
+	updated: (NOW_SECONDS - (i + 1) * 20 * DAY_SECONDS) * 1000,
 }));
 
 /**

@@ -40,15 +40,26 @@
                the same size whatever is on the page. Description takes the space
                left over. Less important columns are hidden on smaller screens,
                so the table never scrolls sideways. #}
+            {% set archivedTab = status == 'archived' %}
             <table class="w-full table-fixed divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50 text-left font-medium text-gray-600">
                     <tr>
-                        <th scope="col" class="w-[40%] px-2 py-3 sm:w-[30%] sm:px-4 lg:w-56">Name</th>
-                        <th scope="col" class="hidden w-24 px-2 py-3 text-right sm:px-4 md:table-cell">Members</th>
+                        {# Name is wider on the Archived tab, which has fewer columns.
+                           Description takes whatever space is left. #}
+                        <th scope="col" class="px-2 py-3 sm:px-4 {{ 'w-[50%] sm:w-[40%] lg:w-80' if archivedTab else 'w-[40%] sm:w-[30%] lg:w-56' }}">Name</th>
+                        {% if not archivedTab %}
+                            <th scope="col" class="hidden w-24 px-2 py-3 text-right sm:px-4 md:table-cell">Members</th>
+                        {% endif %}
                         <th scope="col" class="hidden px-2 py-3 sm:table-cell sm:px-4">Description</th>
-                        <th scope="col" class="w-28 px-2 py-3 sm:px-4">Last message</th>
-                        <th scope="col" class="hidden w-28 px-2 py-3 text-right sm:px-4 md:table-cell">Messages (7 days)</th>
-                        <th scope="col" class="w-28 px-2 py-3 sm:px-4">Status</th>
+                        {% if archivedTab %}
+                            <th scope="col" class="w-28 px-2 py-3 sm:px-4">Archived</th>
+                        {% else %}
+                            <th scope="col" class="w-28 px-2 py-3 sm:px-4">Last message</th>
+                            <th scope="col" class="hidden w-28 px-2 py-3 text-right sm:px-4 md:table-cell">Messages (7 days)</th>
+                        {% endif %}
+                        {% if not archivedTab %}
+                            <th scope="col" class="w-28 px-2 py-3 sm:px-4">Status</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200">
@@ -58,34 +69,45 @@
                                 {# Long names are cut off with "…"; hover to see the full name. #}
                                 <div class="truncate" title="#{{ channel.name }}">#{{ channel.name }}</div>
                             </td>
-                            <td class="hidden px-2 py-3 text-right tabular-nums sm:px-4 md:table-cell">{{ channel.memberCount }}</td>
+                            {% if not archivedTab %}
+                                <td class="hidden px-2 py-3 text-right tabular-nums sm:px-4 md:table-cell">{{ channel.memberCount }}</td>
+                            {% endif %}
                             <td class="hidden px-2 py-3 text-gray-600 sm:table-cell sm:px-4">
                                 {# Wraps onto at most 2 lines, then "…"; hover to see it all. #}
                                 <div class="line-clamp-2 break-words" title="{{ channel.purpose }}">{{ channel.purpose }}</div>
                             </td>
-                            <td class="px-2 py-3 whitespace-nowrap text-gray-600 sm:px-4">
-                                {% if not channel.activity %}
-                                    —
-                                {% elif channel.activity.lastMessageAt %}
-                                    {{ channel.activity.lastMessageAt.toLocaleDateString('en-GB', {timeZone: 'Europe/London'}) }}
-                                {% else %}
-                                    No messages
-                                {% endif %}
-                            </td>
-                            <td class="hidden px-2 py-3 text-right tabular-nums sm:px-4 md:table-cell">
-                                {% if not channel.activity %}
-                                    —
-                                {% elif channel.activity.messagesLastWeek >= 100 %}
-                                    100+
-                                {% else %}
-                                    {{ channel.activity.messagesLastWeek }}
-                                {% endif %}
-                            </td>
+                            {% if archivedTab %}
+                                <td class="px-2 py-3 whitespace-nowrap text-gray-600 sm:px-4">
+                                    {% if channel.archivedAt %}
+                                        {{ channel.archivedAt.toLocaleDateString('en-GB', {timeZone: 'Europe/London'}) }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                            {% else %}
+                                <td class="px-2 py-3 whitespace-nowrap text-gray-600 sm:px-4">
+                                    {% if not channel.activity %}
+                                        —
+                                    {% elif channel.activity.lastMessageAt %}
+                                        {{ channel.activity.lastMessageAt.toLocaleDateString('en-GB', {timeZone: 'Europe/London'}) }}
+                                    {% else %}
+                                        No messages
+                                    {% endif %}
+                                </td>
+                                <td class="hidden px-2 py-3 text-right tabular-nums sm:px-4 md:table-cell">
+                                    {% if not channel.activity %}
+                                        —
+                                    {% elif channel.activity.messagesLastWeek >= 100 %}
+                                        100+
+                                    {% else %}
+                                        {{ channel.activity.messagesLastWeek }}
+                                    {% endif %}
+                                </td>
+                            {% endif %}
+                            {% if not archivedTab %}
                             <td class="px-2 py-3 whitespace-nowrap sm:px-4">
                                 {# The Archive button for inactive channels will go here. #}
-                                {% if channel.isArchived %}
-                                    <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">Archived</span>
-                                {% elif channel.inactive %}
+                                {% if channel.inactive %}
                                     <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Inactive</span>
                                 {% elif channel.activity %}
                                     <span class="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800">Active</span>
@@ -96,10 +118,11 @@
                                     <span class="text-xs text-gray-500">Not checked yet</span>
                                 {% endif %}
                             </td>
+                            {% endif %}
                         </tr>
                     {% else %}
                         <tr>
-                            <td colspan="6" class="px-4 py-6 text-center text-gray-500">No {{ status }} channels.</td>
+                            <td colspan="{{ 3 if archivedTab else 6 }}" class="px-4 py-6 text-center text-gray-500">No {{ status }} channels.</td>
                         </tr>
                     {% endfor %}
                 </tbody>

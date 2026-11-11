@@ -46,7 +46,18 @@ describe('toChannel', () => {
 			topic: 'Company-wide chat',
 			purpose: 'Announcements',
 			created: new Date('2020-09-13T12:26:40Z'),
+			archivedAt: null,
 		});
+	});
+
+	it('uses updated as the archived date for archived channels', () => {
+		const channel = toChannel({
+			...slackChannel,
+			is_archived: true,
+			updated: 1_700_000_000_000,
+		});
+
+		assert.deepEqual(channel.archivedAt, new Date('2023-11-14T22:13:20Z'));
 	});
 
 	it('does not count our bot as a member', () => {

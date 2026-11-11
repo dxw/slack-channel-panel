@@ -13,6 +13,8 @@ const MAX_RETRIES = 3; // number of retries after being rate limited by Slack
  * @property {string} topic
  * @property {string} purpose
  * @property {Date} created
+ * @property {Date | null} archivedAt When an archived channel was archived,
+ *   taken from Slack's `updated` field. Null if not archived.
  */
 
 /**
@@ -31,6 +33,11 @@ export const toChannel = (channel) => {
 		topic: channel.topic?.value ?? '',
 		purpose: channel.purpose?.value ?? '',
 		created: new Date(channel.created * 1000),
+		// Slack has no "archived at" field. `updated` is when the channel's
+		// settings last changed (in ms, unlike `created`), and archiving is the
+		// last change an archived channel can have, so we use that.
+		archivedAt:
+			channel.is_archived && channel.updated ? new Date(channel.updated) : null,
 	};
 };
 
