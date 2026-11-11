@@ -67,8 +67,13 @@ const calls = (fetch) =>
 			.join(' ');
 	});
 
-const refresh = () =>
-	refreshChannels({token: 'xoxb-test', pauseMs: 0, now: () => now});
+const refresh = ({joinChannels = true} = {}) =>
+	refreshChannels({
+		token: 'xoxb-test',
+		joinChannels,
+		pauseMs: 0,
+		now: () => now,
+	});
 
 beforeEach(() => {
 	resetChannelData();
@@ -93,6 +98,28 @@ describe('refreshChannels', () => {
 			'conversations.join C2',
 			'conversations.history C2',
 		]);
+	});
+
+	it('does not join channels when joining is turned off', async () => {
+		const fetch = fakeSlack();
+
+		await refresh({joinChannels: false});
+		const [, quiet] = getChannelData(now).channels;
+
+		assert.deepEqual(calls(fetch), [
+			'conversations.list',
+			'conversations.history C1',
+		]);
+		assert.equal(quiet.activity, undefined);
+		assert.equal(quiet.inactive, false);
+	});
+
+	it('does not join channels unless SLACK_JOIN_CHANNELS=true', async () => {
+		const fetch = fakeSlack();
+
+		await refreshChannels({token: 'xoxb-test', pauseMs: 0});
+
+		assert.ok(!calls(fetch).includes('conversations.join C2'));
 	});
 
 	it('stores each channel with its activity', async () => {

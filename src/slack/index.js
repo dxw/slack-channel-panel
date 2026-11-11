@@ -43,16 +43,21 @@ export const resetChannelData = () => {
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Fetches all channels, then each active channel's recent messages, joining
- * channels the bot isn't in yet. Results are stored as they arrive, so the
- * page fills in during the first refresh.
+ * Fetches all channels, then each active channel's recent messages. Results
+ * are stored as they arrive, so the page fills in during the first refresh.
+ *
+ * The bot can only read channels it's a member of. Joining posts a "joined"
+ * message in the channel, so it's off unless SLACK_JOIN_CHANNELS=true; until
+ * then, only channels the bot is already in are checked.
  * @param {object} options
  * @param {string} options.token Slack bot token.
+ * @param {boolean} [options.joinChannels] Join channels the bot isn't in yet.
  * @param {number} [options.pauseMs] Pause between channels, to respect rate limits.
  * @param {() => number} [options.now] Current time in ms, for tests.
  */
 export const refreshChannels = async ({
 	token,
+	joinChannels = process.env.SLACK_JOIN_CHANNELS === 'true',
 	pauseMs = PAUSE_BETWEEN_CHANNELS_MS,
 	now = Date.now,
 }) => {
@@ -66,9 +71,14 @@ export const refreshChannels = async ({
 		state.channels = channels;
 		state.error = null;
 
-		const toCheck = channels.filter((channel) => !channel.isArchived);
+		const toCheck = channels.filter(
+			(channel) => !channel.isArchived && (channel.isMember || joinChannels),
+		);
 		state.progress = {done: 0, total: toCheck.length};
-		console.log(`Checking activity in ${toCheck.length} channels`);
+		console.log(
+			`Checking activity in ${toCheck.length} channels` +
+				(joinChannels ? '' : ' (only ones the bot is already in)'),
+		);
 
 		for (const channel of toCheck) {
 			try {

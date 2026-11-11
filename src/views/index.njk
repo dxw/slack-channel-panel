@@ -89,6 +89,9 @@
                                     <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Inactive</span>
                                 {% elif channel.activity %}
                                     <span class="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800">Active</span>
+                                {% elif not channel.isMember %}
+                                    {# The bot can only read channels it's in. #}
+                                    <span class="text-xs text-gray-500">Bot not in channel</span>
                                 {% else %}
                                     <span class="text-xs text-gray-500">Not checked yet</span>
                                 {% endif %}
