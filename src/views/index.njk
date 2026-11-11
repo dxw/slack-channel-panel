@@ -24,7 +24,7 @@
                     </a>
                 {% endfor %}
             </nav>
-            <p class="pb-3 text-sm text-gray-500">Last updated {{ fetchedAt.toLocaleString('en-GB') }}</p>
+            <p class="pb-3 text-sm text-gray-500">Last updated {{ fetchedAt.toLocaleString('en-GB', {dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/London'}) }}</p>
         </div>
 
         <div class="mt-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
