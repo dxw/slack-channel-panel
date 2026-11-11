@@ -136,7 +136,10 @@ describe('isAuthorisedClaims', () => {
 	});
 
 	it('returns false when the hosted domain is different', () => {
-		assert.equal(isAuthorisedClaims({...validClaims, hd: 'wrongdomain.com'}), false);
+		assert.equal(
+			isAuthorisedClaims({...validClaims, hd: 'wrongdomain.com'}),
+			false,
+		);
 	});
 
 	it('returns false when the email is at a different domain', () => {

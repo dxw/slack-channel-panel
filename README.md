@@ -9,4 +9,5 @@ npm install
 npm run dev
 ```
 
-`npm run dev` starts the app with nodemon and rebuilds the Tailwind CSS whenever you change a template.
+`npm run dev` starts the app with nodemon and rebuilds the Tailwind
+CSS whenever you change a template.

@@ -4,6 +4,93 @@
 
 {% block content %}
 
-    <p>Welcome to the application.</p>
+    {% if error %}
+        <div class="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
+            {{ error }}
+        </div>
+    {% else %}
+        <div class="flex flex-wrap items-end justify-between gap-2 border-b border-gray-200">
+            <nav aria-label="Channel status" class="-mb-px flex gap-4">
+                {% for tab in [
+                    {status: 'active', label: 'Active', href: '/'},
+                    {status: 'archived', label: 'Archived', href: '/?status=archived'}
+                ] %}
+                    {% set current = tab.status == status %}
+                    <a href="{{ tab.href }}"
+                        {% if current %}aria-current="page"{% endif %}
+                        class="border-b-2 px-1 pb-3 text-sm font-medium {{ 'border-gray-900 text-gray-900' if current else 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700' }}">
+                        {{ tab.label }}
+                        <span class="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{{ counts[tab.status] }}</span>
+                    </a>
+                {% endfor %}
+            </nav>
+            <p class="pb-3 text-sm text-gray-500">Last updated {{ fetchedAt.toLocaleString('en-GB', {dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/London'}) }}</p>
+        </div>
+
+        <div class="mt-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+            {# Fixed column widths, so the columns stay the same size whatever is
+               on the page. Description takes the space left over, so on small
+               screens it's narrower and cut off sooner. #}
+            <table class="w-full table-fixed divide-y divide-gray-200 text-sm">
+                <colgroup>
+                    <col class="w-[30%] lg:w-72">
+                    <col class="w-20 sm:w-28">
+                    <col>
+                    <col class="w-24 sm:w-32">
+                </colgroup>
+                <thead class="bg-gray-50 text-left font-medium text-gray-600">
+                    <tr>
+                        <th scope="col" class="px-2 py-3 sm:px-4">Name</th>
+                        <th scope="col" class="px-2 py-3 text-right sm:px-4">Members</th>
+                        <th scope="col" class="px-2 py-3 sm:px-4">Purpose</th>
+                        <th scope="col" class="px-2 py-3 sm:px-4">Created</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for channel in channels %}
+                        <tr>
+                            <td class="px-2 py-3 font-medium sm:px-4">
+                                {# Long names are cut off with "…"; hover to see the full name. #}
+                                <div class="truncate" title="#{{ channel.name }}">#{{ channel.name }}</div>
+                            </td>
+                            <td class="px-2 py-3 text-right tabular-nums sm:px-4">{{ channel.memberCount }}</td>
+                            <td class="px-2 py-3 text-gray-600 sm:px-4">
+                                {# Wraps onto at most 2 lines, then "…"; hover to see it all. #}
+                                <div class="line-clamp-2 break-words" title="{{ channel.purpose }}">{{ channel.purpose }}</div>
+                            </td>
+                            <td class="px-2 py-3 whitespace-nowrap text-gray-600 sm:px-4">{{ channel.created.toLocaleDateString('en-GB') }}</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="4" class="px-4 py-6 text-center text-gray-500">No {{ status }} channels.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if pagination.total > 0 %}
+            {% set linkClass = 'rounded-md border border-gray-300 bg-white px-3 py-1.5 font-medium hover:bg-gray-100 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900' %}
+            {% set disabledClass = 'rounded-md border border-gray-200 px-3 py-1.5 font-medium text-gray-400' %}
+            <nav aria-label="Pagination" class="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm">
+                <p class="text-gray-600">
+                    Showing {{ pagination.from }}–{{ pagination.to }} of {{ pagination.total }} channels
+                </p>
+                <div class="flex items-center gap-2">
+                    {% if pagination.previousUrl %}
+                        <a href="{{ pagination.previousUrl }}" rel="prev" class="{{ linkClass }}">Previous</a>
+                    {% else %}
+                        <span class="{{ disabledClass }}" aria-disabled="true">Previous</span>
+                    {% endif %}
+                    <span class="px-2 text-gray-600">Page {{ pagination.page }} of {{ pagination.totalPages }}</span>
+                    {% if pagination.nextUrl %}
+                        <a href="{{ pagination.nextUrl }}" rel="next" class="{{ linkClass }}">Next</a>
+                    {% else %}
+                        <span class="{{ disabledClass }}" aria-disabled="true">Next</span>
+                    {% endif %}
+                </div>
+            </nav>
+        {% endif %}
+    {% endif %}
 
 {% endblock %}
