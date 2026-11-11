@@ -40,9 +40,15 @@
                 <tbody class="divide-y divide-gray-200">
                     {% for channel in channels %}
                         <tr>
-                            <td class="px-4 py-3 font-medium whitespace-nowrap">#{{ channel.name }}</td>
+                            <td class="px-4 py-3 font-medium">
+                                {# Long names are cut off with "…"; hover to see the full name. #}
+                                <div class="max-w-64 truncate" title="#{{ channel.name }}">#{{ channel.name }}</div>
+                            </td>
                             <td class="px-4 py-3 text-right tabular-nums">{{ channel.memberCount }}</td>
-                            <td class="px-4 py-3 text-gray-600">{{ channel.purpose }}</td>
+                            <td class="px-4 py-3 text-gray-600">
+                                {# Wraps onto at most 2 lines, then "…"; hover to see it all. #}
+                                <div class="line-clamp-2 max-w-md min-w-48 break-words" title="{{ channel.purpose }}">{{ channel.purpose }}</div>
+                            </td>
                             <td class="px-4 py-3 whitespace-nowrap text-gray-600">{{ channel.created.toLocaleDateString('en-GB') }}</td>
                         </tr>
                     {% else %}
