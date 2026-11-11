@@ -29,6 +29,10 @@ const slackPage = (channels, nextCursor = '') =>
 		response_metadata: {next_cursor: nextCursor},
 	});
 
+/** A 429 response telling us to retry straight away. */
+const rateLimited = () =>
+	new Response(null, {status: 429, headers: {'Retry-After': '0'}});
+
 afterEach(() => {
 	mock.restoreAll();
 });
@@ -90,6 +94,26 @@ describe('fetchChannels', () => {
 			assert.doesNotMatch(error.message, /xoxb-secret/);
 			return true;
 		});
+	});
+
+	it('retries when rate limited', async () => {
+		let calls = 0;
+		mock.method(globalThis, 'fetch', async () =>
+			++calls === 1 ? rateLimited() : slackPage([slackChannel]),
+		);
+
+		const channels = await fetchChannels('xoxb-secret');
+
+		assert.equal(calls, 2);
+		assert.equal(channels.length, 1);
+	});
+
+	it('gives up after 3 retries if still rate limited', async () => {
+		const fetch = mock.method(globalThis, 'fetch', async () => rateLimited());
+
+		await assert.rejects(fetchChannels('xoxb-secret'), /rate limited/);
+		// The first try plus 3 retries.
+		assert.equal(fetch.mock.callCount(), 4);
 	});
 });
 

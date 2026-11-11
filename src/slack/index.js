@@ -2,6 +2,7 @@ import {fakeChannels} from './fake-channels.js';
 
 const CONVERSATIONS_LIST_URL = 'https://slack.com/api/conversations.list';
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const MAX_RETRIES = 3; // number of retries after being rate limited by Slack
 
 /**
  * @typedef {object} Channel
@@ -31,10 +32,12 @@ export const toChannel = (channel) => ({
 
 /**
  * Fetches one page of conversations.list, retrying if rate limited.
+ * Gives up after MAX_RETRIES retries, so callers aren't left waiting forever.
  * @param {string} token
  * @param {string} cursor
+ * @param {number} [retries] How many times this page has been retried.
  */
-const fetchPage = async (token, cursor) => {
+const fetchPage = async (token, cursor, retries = 0) => {
 	const url = new URL(CONVERSATIONS_LIST_URL);
 	url.search = new URLSearchParams({
 		types: 'public_channel',
@@ -48,11 +51,16 @@ const fetchPage = async (token, cursor) => {
 	});
 
 	if (res.status === 429) {
+		if (retries >= MAX_RETRIES) {
+			throw new Error(
+				`Slack conversations.list failed: still rate limited after ${MAX_RETRIES} retries`,
+			);
+		}
 		const retryAfterSeconds = Number(res.headers.get('retry-after') ?? 1);
 		await new Promise((resolve) =>
 			setTimeout(resolve, retryAfterSeconds * 1000),
 		);
-		return fetchPage(token, cursor);
+		return fetchPage(token, cursor, retries + 1);
 	}
 
 	if (!res.ok) {
