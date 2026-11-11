@@ -31,38 +31,48 @@
                 {% endfor %}
             </nav>
             {% if refreshedAt %}
-                <p class="pb-3 text-sm text-gray-500">Last updated {{ refreshedAt.toLocaleString('en-GB') }}</p>
+                <p class="pb-3 text-sm text-gray-500">Last updated {{ refreshedAt.toLocaleString('en-GB', {dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/London'}) }}</p>
             {% endif %}
         </div>
 
-        <div class="mt-4 overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
+        <div class="mt-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+            {# Fixed column widths (set on the header cells), so the columns stay
+               the same size whatever is on the page. Description takes the space
+               left over. Less important columns are hidden on smaller screens,
+               so the table never scrolls sideways. #}
+            <table class="w-full table-fixed divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50 text-left font-medium text-gray-600">
                     <tr>
-                        <th scope="col" class="px-4 py-3">Name</th>
-                        <th scope="col" class="px-4 py-3 text-right">Members</th>
-                        <th scope="col" class="px-4 py-3">Description</th>
-                        <th scope="col" class="px-4 py-3">Last message</th>
-                        <th scope="col" class="px-4 py-3 text-right">Messages (7 days)</th>
-                        <th scope="col" class="px-4 py-3">Status</th>
+                        <th scope="col" class="w-[40%] px-2 py-3 sm:w-[30%] sm:px-4 lg:w-56">Name</th>
+                        <th scope="col" class="hidden w-24 px-2 py-3 text-right sm:px-4 md:table-cell">Members</th>
+                        <th scope="col" class="hidden px-2 py-3 sm:table-cell sm:px-4">Description</th>
+                        <th scope="col" class="w-28 px-2 py-3 sm:px-4">Last message</th>
+                        <th scope="col" class="hidden w-28 px-2 py-3 text-right sm:px-4 md:table-cell">Messages (7 days)</th>
+                        <th scope="col" class="w-28 px-2 py-3 sm:px-4">Status</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200">
                     {% for channel in channels %}
                         <tr>
-                            <td class="px-4 py-3 font-medium whitespace-nowrap">#{{ channel.name }}</td>
-                            <td class="px-4 py-3 text-right tabular-nums">{{ channel.memberCount }}</td>
-                            <td class="px-4 py-3 text-gray-600">{{ channel.purpose }}</td>
-                            <td class="px-4 py-3 whitespace-nowrap text-gray-600">
+                            <td class="px-2 py-3 font-medium sm:px-4">
+                                {# Long names are cut off with "…"; hover to see the full name. #}
+                                <div class="truncate" title="#{{ channel.name }}">#{{ channel.name }}</div>
+                            </td>
+                            <td class="hidden px-2 py-3 text-right tabular-nums sm:px-4 md:table-cell">{{ channel.memberCount }}</td>
+                            <td class="hidden px-2 py-3 text-gray-600 sm:table-cell sm:px-4">
+                                {# Wraps onto at most 2 lines, then "…"; hover to see it all. #}
+                                <div class="line-clamp-2 break-words" title="{{ channel.purpose }}">{{ channel.purpose }}</div>
+                            </td>
+                            <td class="px-2 py-3 whitespace-nowrap text-gray-600 sm:px-4">
                                 {% if not channel.activity %}
                                     —
                                 {% elif channel.activity.lastMessageAt %}
-                                    {{ channel.activity.lastMessageAt.toLocaleDateString('en-GB') }}
+                                    {{ channel.activity.lastMessageAt.toLocaleDateString('en-GB', {timeZone: 'Europe/London'}) }}
                                 {% else %}
                                     No messages
                                 {% endif %}
                             </td>
-                            <td class="px-4 py-3 text-right tabular-nums">
+                            <td class="hidden px-2 py-3 text-right tabular-nums sm:px-4 md:table-cell">
                                 {% if not channel.activity %}
                                     —
                                 {% elif channel.activity.messagesLastWeek >= 100 %}
@@ -71,7 +81,7 @@
                                     {{ channel.activity.messagesLastWeek }}
                                 {% endif %}
                             </td>
-                            <td class="px-4 py-3 whitespace-nowrap">
+                            <td class="px-2 py-3 whitespace-nowrap sm:px-4">
                                 {# The Archive button for inactive channels will go here. #}
                                 {% if channel.isArchived %}
                                     <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">Archived</span>
@@ -92,6 +102,29 @@
                 </tbody>
             </table>
         </div>
+
+        {% if pagination.total > 0 %}
+            {% set linkClass = 'rounded-md border border-gray-300 bg-white px-3 py-1.5 font-medium hover:bg-gray-100 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900' %}
+            {% set disabledClass = 'rounded-md border border-gray-200 px-3 py-1.5 font-medium text-gray-400' %}
+            <nav aria-label="Pagination" class="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm">
+                <p class="text-gray-600">
+                    Showing {{ pagination.from }}–{{ pagination.to }} of {{ pagination.total }} channels
+                </p>
+                <div class="flex items-center gap-2">
+                    {% if pagination.previousUrl %}
+                        <a href="{{ pagination.previousUrl }}" rel="prev" class="{{ linkClass }}">Previous</a>
+                    {% else %}
+                        <span class="{{ disabledClass }}" aria-disabled="true">Previous</span>
+                    {% endif %}
+                    <span class="px-2 text-gray-600">Page {{ pagination.page }} of {{ pagination.totalPages }}</span>
+                    {% if pagination.nextUrl %}
+                        <a href="{{ pagination.nextUrl }}" rel="next" class="{{ linkClass }}">Next</a>
+                    {% else %}
+                        <span class="{{ disabledClass }}" aria-disabled="true">Next</span>
+                    {% endif %}
+                </div>
+            </nav>
+        {% endif %}
     {% endif %}
 
 {% endblock %}

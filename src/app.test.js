@@ -11,6 +11,8 @@ Object.assign(process.env, {
 });
 
 // Fake the Slack API. Other requests (to the test server) use the real fetch.
+// Set `slackFails` to true to make Slack return an error.
+let slackFails = false;
 const DAY_SECONDS = 24 * 60 * 60;
 const nowSeconds = Date.now() / 1000;
 const slackResponses = {
@@ -45,6 +47,18 @@ const slackResponses = {
 				purpose: {value: 'An archived channel for tests'},
 				created: 1_500_000_000,
 			},
+			// 30 more active channels, sorted after #test-channel, so there
+			// are 32 active channels across 2 pages.
+			...Array.from({length: 30}, (_, i) => ({
+				id: `CZ${i}`,
+				name: `zz-channel-${String(i).padStart(2, '0')}`,
+				is_archived: false,
+				is_member: true,
+				num_members: 1,
+				topic: {value: ''},
+				purpose: {value: ''},
+				created: 1_600_000_000,
+			})),
 		],
 		response_metadata: {next_cursor: ''},
 	},
@@ -66,11 +80,16 @@ mock.method(globalThis, 'fetch', async (url, options) => {
 	}
 	const method = url.pathname.replace('/api/', '');
 	const channel = url.searchParams.get('channel');
-	const body = slackResponses[channel ? `${method} ${channel}` : method];
+	if (slackFails) {
+		return Response.json({ok: false, error: 'invalid_auth'});
+	}
+	const body = slackResponses[channel ? `${method} ${channel}` : method] ?? {
+		messages: [],
+	};
 	return Response.json({ok: true, ...body});
 });
 
-const {refreshChannels} = await import('./slack/index.js');
+const {refreshChannels, resetChannelData} = await import('./slack/index.js');
 await refreshChannels({token: 'xoxb-test', pauseMs: 0});
 
 const {default: app} = await import('./app.js');
@@ -188,6 +207,58 @@ describe('when signed in', () => {
 		assert.equal(res.status, 200);
 		assert.ok(html.includes('#old-channel'));
 		assert.ok(!html.includes('#test-channel'));
+	});
+});
+
+describe('pagination', () => {
+	let cookie;
+
+	before(async () => {
+		({cookie} = await login('test@dxw.com'));
+	});
+
+	it('shows 25 channels per page', async () => {
+		const html = await (await get('/', cookie)).text();
+
+		assert.ok(html.includes('Showing 1–25 of 32 channels'));
+		assert.ok(html.includes('#zz-channel-22'));
+		assert.ok(!html.includes('#zz-channel-23'));
+		assert.ok(html.includes('href="/?page=2"'));
+	});
+
+	it('shows the next page', async () => {
+		const html = await (await get('/?page=2', cookie)).text();
+
+		assert.ok(html.includes('Showing 26–32 of 32 channels'));
+		assert.ok(html.includes('#zz-channel-29'));
+		assert.ok(!html.includes('#test-channel'));
+		assert.ok(html.includes('href="/"'));
+	});
+});
+
+describe('when Slack fails', () => {
+	let cookie;
+
+	before(async () => {
+		({cookie} = await login('test@dxw.com'));
+		slackFails = true;
+		resetChannelData();
+		await refreshChannels({token: 'xoxb-test', pauseMs: 0});
+	});
+
+	after(async () => {
+		slackFails = false;
+		resetChannelData();
+		await refreshChannels({token: 'xoxb-test', pauseMs: 0});
+	});
+
+	it('shows an error with a 502 status', async () => {
+		const res = await get('/', cookie);
+
+		assert.equal(res.status, 502);
+		assert.ok(
+			(await res.text()).includes('Couldn’t load channels from Slack.'),
+		);
 	});
 });
 

@@ -1,6 +1,7 @@
 // A client for the Slack Web API methods used.
 
 const SLACK_API_URL = 'https://slack.com/api/';
+const MAX_RETRIES = 3; // number of retries after being rate limited by Slack
 
 /**
  * @typedef {object} Channel
@@ -35,13 +36,21 @@ export const toChannel = (channel) => {
 
 /**
  * Calls a Slack Web API method, waiting and retrying if rate limited.
+ * Gives up after MAX_RETRIES retries, so callers aren't left waiting forever.
  * @param {string} method For example 'conversations.list'.
  * @param {Record<string, string>} params
  * @param {string} token Slack bot token.
- * @param {{post?: boolean}} [options] POST the params as a form (for writes).
+ * @param {{post?: boolean, retries?: number}} [options] `post` sends the
+ *   params as a form (for writes). `retries` is how many times this call has
+ *   been retried.
  * @returns {Promise<any>} The response body.
  */
-export const callSlack = async (method, params, token, {post = false} = {}) => {
+export const callSlack = async (
+	method,
+	params,
+	token,
+	{post = false, retries = 0} = {},
+) => {
 	const url = new URL(method, SLACK_API_URL);
 	const body = new URLSearchParams(params);
 	if (!post) {
@@ -55,11 +64,16 @@ export const callSlack = async (method, params, token, {post = false} = {}) => {
 	});
 
 	if (res.status === 429) {
+		if (retries >= MAX_RETRIES) {
+			throw new Error(
+				`Slack ${method} failed: still rate limited after ${MAX_RETRIES} retries`,
+			);
+		}
 		const retryAfterSeconds = Number(res.headers.get('retry-after') ?? 1);
 		await new Promise((resolve) =>
 			setTimeout(resolve, retryAfterSeconds * 1000),
 		);
-		return callSlack(method, params, token, {post});
+		return callSlack(method, params, token, {post, retries: retries + 1});
 	}
 
 	if (!res.ok) {

@@ -94,6 +94,24 @@ describe('callSlack', () => {
 	});
 });
 
+describe('callSlack when rate limited', () => {
+	it('gives up after 3 retries', async () => {
+		const fetch = mock.method(
+			globalThis,
+			'fetch',
+			async () =>
+				new Response(null, {status: 429, headers: {'Retry-After': '0'}}),
+		);
+
+		await assert.rejects(
+			callSlack('auth.test', {}, 'xoxb-secret'),
+			/still rate limited after 3 retries/,
+		);
+		// The first try plus 3 retries.
+		assert.equal(fetch.mock.callCount(), 4);
+	});
+});
+
 describe('listChannels', () => {
 	it('lists public channels, following the cursor across pages', async () => {
 		const fetch = mock.method(globalThis, 'fetch', async (url) =>
