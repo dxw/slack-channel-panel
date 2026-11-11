@@ -59,6 +59,29 @@
                 </tbody>
             </table>
         </div>
+
+        {% if pagination.total > 0 %}
+            {% set linkClass = 'rounded-md border border-gray-300 bg-white px-3 py-1.5 font-medium hover:bg-gray-100 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900' %}
+            {% set disabledClass = 'rounded-md border border-gray-200 px-3 py-1.5 font-medium text-gray-400' %}
+            <nav aria-label="Pagination" class="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm">
+                <p class="text-gray-600">
+                    Showing {{ pagination.from }}–{{ pagination.to }} of {{ pagination.total }} channels
+                </p>
+                <div class="flex items-center gap-2">
+                    {% if pagination.previousUrl %}
+                        <a href="{{ pagination.previousUrl }}" rel="prev" class="{{ linkClass }}">Previous</a>
+                    {% else %}
+                        <span class="{{ disabledClass }}" aria-disabled="true">Previous</span>
+                    {% endif %}
+                    <span class="px-2 text-gray-600">Page {{ pagination.page }} of {{ pagination.totalPages }}</span>
+                    {% if pagination.nextUrl %}
+                        <a href="{{ pagination.nextUrl }}" rel="next" class="{{ linkClass }}">Next</a>
+                    {% else %}
+                        <span class="{{ disabledClass }}" aria-disabled="true">Next</span>
+                    {% endif %}
+                </div>
+            </nav>
+        {% endif %}
     {% endif %}
 
 {% endblock %}

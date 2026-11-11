@@ -35,6 +35,17 @@ mock.method(globalThis, 'fetch', async (url, options) =>
 						purpose: {value: 'An archived channel for tests'},
 						created: 1_500_000_000,
 					},
+					// 30 more active channels, sorted after #test-channel, so
+					// there are 31 active channels across 2 pages.
+					...Array.from({length: 30}, (_, i) => ({
+						id: `CZ${i}`,
+						name: `zz-channel-${String(i).padStart(2, '0')}`,
+						is_archived: false,
+						num_members: 1,
+						topic: {value: ''},
+						purpose: {value: ''},
+						created: 1_600_000_000,
+					})),
 				],
 				response_metadata: {next_cursor: ''},
 			})
@@ -141,6 +152,24 @@ describe('when signed in', () => {
 		assert.equal(res.status, 200);
 		assert.ok(html.includes('#old-channel'));
 		assert.ok(!html.includes('#test-channel'));
+	});
+
+	it('shows 25 channels per page', async () => {
+		const html = await (await get('/', cookie)).text();
+
+		assert.ok(html.includes('Showing 1–25 of 31 channels'));
+		assert.ok(html.includes('#zz-channel-23'));
+		assert.ok(!html.includes('#zz-channel-24'));
+		assert.ok(html.includes('href="/?page=2"'));
+	});
+
+	it('shows the next page', async () => {
+		const html = await (await get('/?page=2', cookie)).text();
+
+		assert.ok(html.includes('Showing 26–31 of 31 channels'));
+		assert.ok(html.includes('#zz-channel-29'));
+		assert.ok(!html.includes('#test-channel'));
+		assert.ok(html.includes('href="/"'));
 	});
 });
 
