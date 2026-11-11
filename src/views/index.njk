@@ -27,29 +27,38 @@
             <p class="pb-3 text-sm text-gray-500">Last updated {{ fetchedAt.toLocaleString('en-GB') }}</p>
         </div>
 
-        <div class="mt-4 overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
+        <div class="mt-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+            {# Fixed column widths, so the columns stay the same size whatever is
+               on the page. Description takes the space left over, so on small
+               screens it's narrower and cut off sooner. #}
+            <table class="w-full table-fixed divide-y divide-gray-200 text-sm">
+                <colgroup>
+                    <col class="w-[30%] lg:w-72">
+                    <col class="w-20 sm:w-28">
+                    <col>
+                    <col class="w-24 sm:w-32">
+                </colgroup>
                 <thead class="bg-gray-50 text-left font-medium text-gray-600">
                     <tr>
-                        <th scope="col" class="px-4 py-3">Name</th>
-                        <th scope="col" class="px-4 py-3 text-right">Members</th>
-                        <th scope="col" class="px-4 py-3">Purpose</th>
-                        <th scope="col" class="px-4 py-3">Created</th>
+                        <th scope="col" class="px-2 py-3 sm:px-4">Name</th>
+                        <th scope="col" class="px-2 py-3 text-right sm:px-4">Members</th>
+                        <th scope="col" class="px-2 py-3 sm:px-4">Purpose</th>
+                        <th scope="col" class="px-2 py-3 sm:px-4">Created</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200">
                     {% for channel in channels %}
                         <tr>
-                            <td class="px-4 py-3 font-medium">
+                            <td class="px-2 py-3 font-medium sm:px-4">
                                 {# Long names are cut off with "…"; hover to see the full name. #}
-                                <div class="max-w-64 truncate" title="#{{ channel.name }}">#{{ channel.name }}</div>
+                                <div class="truncate" title="#{{ channel.name }}">#{{ channel.name }}</div>
                             </td>
-                            <td class="px-4 py-3 text-right tabular-nums">{{ channel.memberCount }}</td>
-                            <td class="px-4 py-3 text-gray-600">
+                            <td class="px-2 py-3 text-right tabular-nums sm:px-4">{{ channel.memberCount }}</td>
+                            <td class="px-2 py-3 text-gray-600 sm:px-4">
                                 {# Wraps onto at most 2 lines, then "…"; hover to see it all. #}
-                                <div class="line-clamp-2 max-w-md min-w-48 break-words" title="{{ channel.purpose }}">{{ channel.purpose }}</div>
+                                <div class="line-clamp-2 break-words" title="{{ channel.purpose }}">{{ channel.purpose }}</div>
                             </td>
-                            <td class="px-4 py-3 whitespace-nowrap text-gray-600">{{ channel.created.toLocaleDateString('en-GB') }}</td>
+                            <td class="px-2 py-3 whitespace-nowrap text-gray-600 sm:px-4">{{ channel.created.toLocaleDateString('en-GB') }}</td>
                         </tr>
                     {% else %}
                         <tr>
