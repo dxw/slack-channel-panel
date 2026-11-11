@@ -194,7 +194,8 @@ describe('when signed in', () => {
 
 	it('marks channels with no messages in 7 days as inactive', async () => {
 		const html = await (await get('/', cookie)).text();
-		const rowFor = (name) => html.split(`#${name}`)[1].split('</tr>')[0];
+		const rowFor = (name) =>
+			html.split('<tr>').find((row) => row.includes(`#${name}`));
 
 		assert.ok(rowFor('quiet-channel').includes('Inactive'));
 		assert.ok(!rowFor('test-channel').includes('Inactive'));
@@ -233,6 +234,34 @@ describe('pagination', () => {
 		assert.ok(html.includes('#zz-channel-29'));
 		assert.ok(!html.includes('#test-channel'));
 		assert.ok(html.includes('href="/"'));
+	});
+});
+
+describe('sorting', () => {
+	let cookie;
+
+	before(async () => {
+		({cookie} = await login('test@dxw.com'));
+	});
+
+	it('sorts by name A–Z by default', async () => {
+		const html = await (await get('/', cookie)).text();
+
+		assert.ok(html.indexOf('#quiet-channel') < html.indexOf('#test-channel'));
+	});
+
+	it('sorts by most messages first', async () => {
+		const html = await (await get('/?sort=messages&dir=desc', cookie)).text();
+
+		// #test-channel has 1 message this week; #quiet-channel has none.
+		assert.ok(html.indexOf('#test-channel') < html.indexOf('#quiet-channel'));
+		assert.ok(html.includes('aria-sort="descending"'));
+	});
+
+	it('keeps the sort when changing page', async () => {
+		const html = await (await get('/?sort=messages&dir=desc', cookie)).text();
+
+		assert.ok(html.includes('href="/?sort=messages&amp;dir=desc&amp;page=2"'));
 	});
 });
 

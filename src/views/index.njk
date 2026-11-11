@@ -4,6 +4,25 @@
 
 {% block content %}
 
+    {# A table heading that sorts by its column when clicked. `link` is from
+       the route's `sortLinks`: the URL to go to, and the current direction if
+       the table is sorted by this column. #}
+    {% macro sortHeader(label, link, classes) %}
+        <th scope="col" class="{{ classes }}"
+            {% if link.current %}aria-sort="{{ 'ascending' if link.current == 'asc' else 'descending' }}"{% endif %}>
+            <a href="{{ link.url }}" class="inline-flex items-center gap-1 rounded hover:text-gray-900 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900 {{ 'text-gray-900' if link.current }}">
+                {{ label }}
+                {# The same chevron icon in every state, so they all match:
+                   up = ascending, down = descending, both = not sorted. #}
+                <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+                    class="size-4 shrink-0 {{ 'text-gray-900' if link.current else 'text-gray-400' }}">
+                    {% if link.current != 'desc' %}<path d="M5 6.5 8 3.5l3 3"/>{% endif %}
+                    {% if link.current != 'asc' %}<path d="M5 9.5 8 12.5l3-3"/>{% endif %}
+                </svg>
+            </a>
+        </th>
+    {% endmacro %}
+
     {% if error %}
         <div class="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
             {{ error }}
@@ -46,19 +65,19 @@
                     <tr>
                         {# Name is wider on the Archived tab, which has fewer columns.
                            Description takes whatever space is left. #}
-                        <th scope="col" class="px-2 py-3 sm:px-4 {{ 'w-[50%] sm:w-[40%] lg:w-80' if archivedTab else 'w-[40%] sm:w-[30%] lg:w-56' }}">Name</th>
+                        {{ sortHeader('Name', sortLinks.name, 'px-2 py-3 sm:px-4 ' + ('w-[50%] sm:w-[40%] lg:w-80' if archivedTab else 'w-[40%] sm:w-[30%] lg:w-56')) }}
                         {% if not archivedTab %}
-                            <th scope="col" class="hidden w-24 px-2 py-3 text-right sm:px-4 md:table-cell">Members</th>
+                            {{ sortHeader('Members', sortLinks.members, 'hidden w-24 px-2 py-3 text-right sm:px-4 md:table-cell') }}
                         {% endif %}
                         <th scope="col" class="hidden px-2 py-3 sm:table-cell sm:px-4">Description</th>
                         {% if archivedTab %}
-                            <th scope="col" class="w-28 px-2 py-3 sm:px-4">Archived</th>
+                            {{ sortHeader('Archived', sortLinks.archived, 'w-28 px-2 py-3 sm:px-4') }}
                         {% else %}
-                            <th scope="col" class="w-28 px-2 py-3 sm:px-4">Last message</th>
-                            <th scope="col" class="hidden w-28 px-2 py-3 text-right sm:px-4 md:table-cell">Messages (7 days)</th>
+                            {{ sortHeader('Last message', sortLinks.lastMessage, 'w-32 px-2 py-3 sm:px-4') }}
+                            {{ sortHeader('Messages (7 days)', sortLinks.messages, 'hidden w-32 px-2 py-3 text-right sm:px-4 md:table-cell') }}
                         {% endif %}
                         {% if not archivedTab %}
-                            <th scope="col" class="w-28 px-2 py-3 sm:px-4">Status</th>
+                            {{ sortHeader('Status', sortLinks.status, 'w-28 px-2 py-3 sm:px-4') }}
                         {% endif %}
                     </tr>
                 </thead>
