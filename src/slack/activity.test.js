@@ -1,6 +1,6 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
-import {isHumanMessage, summariseActivity, isInactive} from './activity.js';
+import {isCountedMessage, summariseActivity, isInactive} from './activity.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const now = Date.parse('2026-11-10T12:00:00Z');
@@ -19,19 +19,24 @@ const post = (days, extra = {}) => ({
 	...extra,
 });
 
-describe('isHumanMessage', () => {
+describe('isCountedMessage', () => {
 	it('counts plain posts, file shares and thread broadcasts', () => {
-		assert.ok(isHumanMessage(post(1)));
-		assert.ok(isHumanMessage(post(1, {subtype: 'file_share'})));
-		assert.ok(isHumanMessage(post(1, {subtype: 'thread_broadcast'})));
+		assert.ok(isCountedMessage(post(1)));
+		assert.ok(isCountedMessage(post(1, {subtype: 'file_share'})));
+		assert.ok(isCountedMessage(post(1, {subtype: 'thread_broadcast'})));
 	});
 
-	it('ignores joins, leaves, topic changes and bots', () => {
-		assert.ok(!isHumanMessage(post(1, {subtype: 'channel_join'})));
-		assert.ok(!isHumanMessage(post(1, {subtype: 'channel_leave'})));
-		assert.ok(!isHumanMessage(post(1, {subtype: 'channel_topic'})));
-		assert.ok(!isHumanMessage(post(1, {subtype: 'bot_message', bot_id: 'B1'})));
-		assert.ok(!isHumanMessage(post(1, {bot_id: 'B1'})));
+	it('counts messages from bots', () => {
+		assert.ok(
+			isCountedMessage(post(1, {subtype: 'bot_message', bot_id: 'B1'})),
+		);
+		assert.ok(isCountedMessage(post(1, {bot_id: 'B1'})));
+	});
+
+	it('ignores joins, leaves and topic changes', () => {
+		assert.ok(!isCountedMessage(post(1, {subtype: 'channel_join'})));
+		assert.ok(!isCountedMessage(post(1, {subtype: 'channel_leave'})));
+		assert.ok(!isCountedMessage(post(1, {subtype: 'channel_topic'})));
 	});
 });
 
@@ -48,15 +53,15 @@ describe('summariseActivity', () => {
 		});
 	});
 
-	it('ignores messages that are not from people', () => {
+	it('counts bot messages but not joins', () => {
 		const activity = summariseActivity(
-			[post(0, {subtype: 'channel_join'}), post(0, {bot_id: 'B1'}), post(40)],
+			[post(0, {subtype: 'channel_join'}), post(2, {bot_id: 'B1'}), post(40)],
 			now,
 		);
 
 		assert.deepEqual(activity, {
-			lastMessageAt: new Date(now - 40 * DAY_MS),
-			messagesLastMonth: 0,
+			lastMessageAt: new Date(now - 2 * DAY_MS),
+			messagesLastMonth: 1,
 		});
 	});
 
@@ -69,7 +74,7 @@ describe('summariseActivity', () => {
 		assert.deepEqual(activity.lastMessageAt, new Date(now - 2 * DAY_MS));
 	});
 
-	it('returns no last message when no person has posted', () => {
+	it('returns no last message when nobody has posted', () => {
 		assert.deepEqual(
 			summariseActivity([post(1, {subtype: 'channel_join'})], now),
 			{lastMessageAt: null, messagesLastMonth: 0},
