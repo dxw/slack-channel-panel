@@ -187,9 +187,15 @@ describe('when signed in', () => {
 
 	it('shows when each channel last had a message', async () => {
 		const html = await (await get('/', cookie)).text();
-		const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+		// #test-channel's message, from the fixture. Formatted in London time,
+		// as the page does, so it matches whatever the runner's time zone.
+		const lastMessage = new Date((nowSeconds - DAY_SECONDS) * 1000);
 
-		assert.ok(html.includes(yesterday.toLocaleDateString('en-GB')));
+		assert.ok(
+			html.includes(
+				lastMessage.toLocaleDateString('en-GB', {timeZone: 'Europe/London'}),
+			),
+		);
 	});
 
 	it('marks channels with no messages in 7 days as inactive', async () => {
