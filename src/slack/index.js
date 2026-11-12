@@ -1,142 +1,185 @@
-import {fakeChannels} from './fake-channels.js';
+// Keeps the workspace's channels and their activity in memory, refreshed from Slack in the background.
+// Page views read from here and never call Slack themselves.
 
-const CONVERSATIONS_LIST_URL = 'https://slack.com/api/conversations.list';
-const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
-const MAX_RETRIES = 3; // number of retries after being rate limited by Slack
+import {
+	listChannels,
+	getOwnTeamId,
+	joinChannel,
+	fetchRecentMessages,
+	toChannel,
+} from './api.js';
+import {summariseActivity, isInactive} from './activity.js';
+import {fakeChannels, fakeMessages} from './fake-channels.js';
 
-/**
- * @typedef {object} Channel
- * @property {string} id
- * @property {string} name
- * @property {boolean} isArchived
- * @property {number} memberCount
- * @property {string} topic
- * @property {string} purpose
- * @property {Date} created
- */
+const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+// conversations.history allows about 50 calls a minute, so pause between channels.
+const PAUSE_BETWEEN_CHANNELS_MS = 1200;
 
-/**
- * Picks the fields we use from a Slack conversation object.
- * @param {any} channel
- * @returns {Channel}
- */
-export const toChannel = (channel) => ({
-	id: channel.id,
-	name: channel.name,
-	isArchived: channel.is_archived,
-	memberCount: channel.num_members ?? 0,
-	topic: channel.topic?.value ?? '',
-	purpose: channel.purpose?.value ?? '',
-	created: new Date(channel.created * 1000),
+/** @typedef {import('./api.js').Channel} Channel */
+/** @typedef {import('./activity.js').Activity} Activity */
+
+const emptyState = () => ({
+	/** @type {Channel[]} */
+	channels: [],
+	/** @type {Map<string, Activity>} */
+	activity: new Map(),
+	/** @type {Date | null} */
+	refreshedAt: null,
+	refreshing: false,
+	progress: {done: 0, total: 0},
+	/** @type {string | null} */
+	error: null,
 });
 
+let state = emptyState();
+
+/** Empties the store. Used by tests. */
+export const resetChannelData = () => {
+	state = emptyState();
+};
+
 /**
- * Fetches one page of conversations.list, retrying if rate limited.
- * Gives up after MAX_RETRIES retries, so callers aren't left waiting forever.
- * @param {string} token
- * @param {string} cursor
- * @param {number} [retries] How many times this page has been retried.
+ * @param {number} ms
  */
-const fetchPage = async (token, cursor, retries = 0) => {
-	const url = new URL(CONVERSATIONS_LIST_URL);
-	url.search = new URLSearchParams({
-		types: 'public_channel',
-		exclude_archived: 'false',
-		limit: '1000',
-		...(cursor && {cursor}),
-	}).toString();
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-	const res = await fetch(url, {
-		headers: {Authorization: `Bearer ${token}`},
-	});
+/**
+ * Fetches all channels, then each active channel's recent messages. Results
+ * are stored as they arrive, so the page fills in during the first refresh.
+ *
+ * The bot can only read channels it's a member of. Joining posts a "joined"
+ * message in the channel, so it's off unless SLACK_JOIN_CHANNELS=true; until
+ * then, only channels the bot is already in are checked.
+ * @param {object} options
+ * @param {string} options.token Slack bot token.
+ * @param {boolean} [options.joinChannels] Join channels the bot isn't in yet.
+ * @param {number} [options.pauseMs] Pause between channels, to respect rate limits.
+ * @param {() => number} [options.now] Current time in ms, for tests.
+ */
+export const refreshChannels = async ({
+	token,
+	joinChannels = process.env.SLACK_JOIN_CHANNELS === 'true',
+	pauseMs = PAUSE_BETWEEN_CHANNELS_MS,
+	now = Date.now,
+}) => {
+	if (state.refreshing) {
+		return;
+	}
+	state.refreshing = true;
 
-	if (res.status === 429) {
-		if (retries >= MAX_RETRIES) {
-			throw new Error(
-				`Slack conversations.list failed: still rate limited after ${MAX_RETRIES} retries`,
-			);
-		}
-		const retryAfterSeconds = Number(res.headers.get('retry-after') ?? 1);
-		await new Promise((resolve) =>
-			setTimeout(resolve, retryAfterSeconds * 1000),
+	try {
+		const channels = await listChannels(token);
+		state.channels = channels;
+		state.error = null;
+
+		// Only check channels the bot is in, or can join. It joins Slack Connect
+		// channels only if they're hosted by our own organisation, never ones
+		// another organisation owns and has shared with us.
+		const ownTeamId = joinChannels ? await getOwnTeamId(token) : null;
+		const canJoin = (channel) =>
+			joinChannels &&
+			(!channel.isExternal || channel.hostTeamId === ownTeamId);
+		const toCheck = channels.filter(
+			(channel) =>
+				!channel.isArchived && (channel.isMember || canJoin(channel)),
 		);
-		return fetchPage(token, cursor, retries + 1);
-	}
+		const checkedIds = new Set(toCheck.map((channel) => channel.id));
+		for (const id of state.activity.keys()) {
+			if (!checkedIds.has(id)) {
+				state.activity.delete(id);
+			}
+		}
+		state.progress = {done: 0, total: toCheck.length};
+		console.log(
+			`Checking activity in ${toCheck.length} channels` +
+				(joinChannels ? '' : ' (only ones the bot is already in)'),
+		);
 
-	if (!res.ok) {
-		throw new Error(`Slack conversations.list failed: HTTP ${res.status}`);
-	}
+		for (const channel of toCheck) {
+			try {
+				if (!channel.isMember) {
+					await joinChannel(token, channel.id);
+					channel.isMember = true;
+					console.log(`Joined #${channel.name}`);
+				}
+				const messages = await fetchRecentMessages(token, channel.id);
+				state.activity.set(channel.id, summariseActivity(messages, now()));
+			} catch (error) {
+				// Keep going: one channel failing shouldn't stop the rest.
+				state.activity.delete(channel.id);
+				console.error(`Couldn’t check #${channel.name}: ${error.message}`);
+			}
+			state.progress.done += 1;
+			await pause(pauseMs);
+		}
 
-	const body = await res.json();
-	if (!body.ok) {
-		throw new Error(`Slack conversations.list failed: ${body.error}`);
+		state.refreshedAt = new Date(now());
+		console.log('Finished checking channel activity');
+	} catch (error) {
+		// Keep any channels from the last refresh.
+		state.error = error.message;
+		console.error(`Couldn’t refresh channels: ${error.message}`);
+	} finally {
+		state.refreshing = false;
 	}
-	return body;
+};
+
+/** Fills the store with made-up channels, without calling Slack. */
+const loadFakeChannels = () => {
+	state.channels = fakeChannels.map(toChannel);
+	// Like a real refresh, archived channels aren't checked.
+	for (const channel of state.channels.filter((c) => !c.isArchived)) {
+		state.activity.set(
+			channel.id,
+			summariseActivity(fakeMessages[channel.id] ?? []),
+		);
+	}
+	state.refreshedAt = new Date();
+	state.error = null;
 };
 
 /**
- * Fetches every public channel in the workspace, following pagination.
- * @param {string} token Slack bot token with channels:read.
- * @returns {Promise<Channel[]>}
+ * Starts refreshing channels now and every 6 hours.
+ * Uses made-up channels if SLACK_FAKE_DATA=true (not in production).
  */
-export const fetchChannels = async (token) => {
-	const channels = [];
-	let cursor = '';
-
-	do {
-		const body = await fetchPage(token, cursor);
-		channels.push(...body.channels.map(toChannel));
-		cursor = body.response_metadata?.next_cursor ?? '';
-	} while (cursor);
-
-	return channels;
-};
-
-/** @type {{channels: Channel[], fetchedAt: number} | undefined} */
-let cache;
-/** @type {Promise<{channels: Channel[], fetchedAt: number}> | undefined} */
-let inFlight;
-
-/** Empties the channel cache. Used by tests. */
-export const clearChannelCache = () => {
-	cache = undefined;
-	inFlight = undefined;
-};
-
-/**
- * Returns the workspace's channels, cached in memory for 15 minutes.
- * @param {number} [now] Current time in ms, for tests.
- * @returns {Promise<{channels: Channel[], fetchedAt: number}>}
- */
-export const getChannels = async (now = Date.now()) => {
-	if (cache && now - cache.fetchedAt < CACHE_TTL_MS) {
-		return cache;
-	}
-
+export const startChannelRefresh = () => {
 	if (
 		process.env.SLACK_FAKE_DATA === 'true' &&
 		process.env.NODE_ENV !== 'production'
 	) {
-		cache = {channels: fakeChannels.map(toChannel), fetchedAt: now};
-		return cache;
+		console.warn('Using fake Slack data');
+		loadFakeChannels();
+		return;
 	}
 
 	const token = process.env.SLACK_BOT_TOKEN;
 	if (!token) {
-		throw new Error(
+		state.error = 'SLACK_BOT_TOKEN is not set';
+		console.error(
 			'SLACK_BOT_TOKEN is not set. Set SLACK_FAKE_DATA=true to use made-up channels in development.',
 		);
+		return;
 	}
 
-	inFlight ??= fetchChannels(token)
-		.then((channels) => {
-			console.log(`Fetched ${channels.length} channels from Slack`);
-			cache = {channels, fetchedAt: now};
-			return cache;
-		})
-		.finally(() => {
-			inFlight = undefined;
-		});
-
-	return inFlight;
+	refreshChannels({token});
+	setInterval(() => refreshChannels({token}), REFRESH_INTERVAL_MS);
 };
+
+/**
+ * Returns the stored channels, each with its activity.
+ * @param {number} [now] Current time in ms.
+ */
+export const getChannelData = (now = Date.now()) => ({
+	channels: state.channels.map((channel) => {
+		const activity = state.activity.get(channel.id);
+		return {
+			...channel,
+			activity,
+			inactive: !channel.isArchived && isInactive(activity, now),
+		};
+	}),
+	refreshedAt: state.refreshedAt,
+	refreshing: state.refreshing,
+	progress: {...state.progress},
+	error: state.error,
+});

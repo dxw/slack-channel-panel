@@ -13,53 +13,86 @@ Object.assign(process.env, {
 // Fake the Slack API. Other requests (to the test server) use the real fetch.
 // Set `slackFails` to true to make Slack return an error.
 let slackFails = false;
+const DAY_SECONDS = 24 * 60 * 60;
+const nowSeconds = Date.now() / 1000;
+const slackResponses = {
+	'conversations.list': {
+		channels: [
+			{
+				id: 'C123',
+				name: 'test-channel',
+				is_archived: false,
+				is_member: true,
+				num_members: 3,
+				topic: {value: ''},
+				purpose: {value: 'A channel for tests'},
+				created: 1_600_000_000,
+			},
+			{
+				id: 'C789',
+				name: 'quiet-channel',
+				is_archived: false,
+				is_member: true,
+				num_members: 3,
+				topic: {value: ''},
+				purpose: {value: 'Nobody posts here'},
+				created: 1_600_000_000,
+			},
+			{
+				id: 'C456',
+				name: 'old-channel',
+				is_archived: true,
+				num_members: 0,
+				topic: {value: ''},
+				purpose: {value: 'An archived channel for tests'},
+				created: 1_500_000_000,
+			},
+			// 30 more active channels, sorted after #test-channel, so there
+			// are 32 active channels across 2 pages.
+			...Array.from({length: 30}, (_, i) => ({
+				id: `CZ${i}`,
+				name: `zz-channel-${String(i).padStart(2, '0')}`,
+				is_archived: false,
+				is_member: true,
+				num_members: 1,
+				topic: {value: ''},
+				purpose: {value: ''},
+				created: 1_600_000_000,
+			})),
+		],
+		response_metadata: {next_cursor: ''},
+	},
+	'conversations.history C123': {
+		messages: [
+			{type: 'message', user: 'U1', ts: String(nowSeconds - DAY_SECONDS)},
+		],
+	},
+	'conversations.history C789': {
+		messages: [
+			{type: 'message', user: 'U1', ts: String(nowSeconds - 30 * DAY_SECONDS)},
+		],
+	},
+};
 const realFetch = globalThis.fetch;
-mock.method(globalThis, 'fetch', async (url, options) =>
-	String(url).startsWith('https://slack.com/')
-		? Response.json(
-				slackFails
-					? {ok: false, error: 'invalid_auth'}
-					: {
-							ok: true,
-							channels: [
-								{
-									id: 'C123',
-									name: 'test-channel',
-									is_archived: false,
-									num_members: 3,
-									topic: {value: ''},
-									purpose: {value: 'A channel for tests'},
-									created: 1_600_000_000,
-								},
-								{
-									id: 'C456',
-									name: 'old-channel',
-									is_archived: true,
-									num_members: 0,
-									topic: {value: ''},
-									purpose: {value: 'An archived channel for tests'},
-									created: 1_500_000_000,
-								},
-								// 30 more active channels, sorted after #test-channel, so
-								// there are 31 active channels across 2 pages.
-								...Array.from({length: 30}, (_, i) => ({
-									id: `CZ${i}`,
-									name: `zz-channel-${String(i).padStart(2, '0')}`,
-									is_archived: false,
-									num_members: 1,
-									topic: {value: ''},
-									purpose: {value: ''},
-									created: 1_600_000_000,
-								})),
-							],
-							response_metadata: {next_cursor: ''},
-						},
-			)
-		: realFetch(url, options),
-);
+mock.method(globalThis, 'fetch', async (url, options) => {
+	if (!String(url).startsWith('https://slack.com/')) {
+		return realFetch(url, options);
+	}
+	const method = url.pathname.replace('/api/', '');
+	const channel = url.searchParams.get('channel');
+	if (slackFails) {
+		return Response.json({ok: false, error: 'invalid_auth'});
+	}
+	const body = slackResponses[channel ? `${method} ${channel}` : method] ?? {
+		messages: [],
+	};
+	return Response.json({ok: true, ...body});
+});
+
+const {refreshChannels, resetChannelData} = await import('./slack/index.js');
+await refreshChannels({token: 'xoxb-test', pauseMs: 0});
 
 const {default: app} = await import('./app.js');
-const {clearChannelCache} = await import('./slack/index.js');
 
 let server;
 let baseUrl;
@@ -152,6 +185,28 @@ describe('when signed in', () => {
 		assert.ok(html.includes('Sign out'));
 	});
 
+	it('shows when each channel last had a message', async () => {
+		const html = await (await get('/', cookie)).text();
+		// #test-channel's message, from the fixture. Formatted in London time,
+		// as the page does, so it matches whatever the runner's time zone.
+		const lastMessage = new Date((nowSeconds - DAY_SECONDS) * 1000);
+
+		assert.ok(
+			html.includes(
+				lastMessage.toLocaleDateString('en-GB', {timeZone: 'Europe/London'}),
+			),
+		);
+	});
+
+	it('marks channels with no messages in 7 days as inactive', async () => {
+		const html = await (await get('/', cookie)).text();
+		const rowFor = (name) =>
+			html.split('<tr>').find((row) => row.includes(`#${name}`));
+
+		assert.ok(rowFor('quiet-channel').includes('Inactive'));
+		assert.ok(!rowFor('test-channel').includes('Inactive'));
+	});
+
 	it('shows archived channels', async () => {
 		const res = await get('/?status=archived', cookie);
 		const html = await res.text();
@@ -160,23 +215,59 @@ describe('when signed in', () => {
 		assert.ok(html.includes('#old-channel'));
 		assert.ok(!html.includes('#test-channel'));
 	});
+});
+
+describe('pagination', () => {
+	let cookie;
+
+	before(async () => {
+		({cookie} = await login('test@dxw.com'));
+	});
 
 	it('shows 25 channels per page', async () => {
 		const html = await (await get('/', cookie)).text();
 
-		assert.ok(html.includes('Showing 1–25 of 31 channels'));
-		assert.ok(html.includes('#zz-channel-23'));
-		assert.ok(!html.includes('#zz-channel-24'));
+		assert.ok(html.includes('Showing 1–25 of 32 channels'));
+		assert.ok(html.includes('#zz-channel-22'));
+		assert.ok(!html.includes('#zz-channel-23'));
 		assert.ok(html.includes('href="/?page=2"'));
 	});
 
 	it('shows the next page', async () => {
 		const html = await (await get('/?page=2', cookie)).text();
 
-		assert.ok(html.includes('Showing 26–31 of 31 channels'));
+		assert.ok(html.includes('Showing 26–32 of 32 channels'));
 		assert.ok(html.includes('#zz-channel-29'));
 		assert.ok(!html.includes('#test-channel'));
 		assert.ok(html.includes('href="/"'));
+	});
+});
+
+describe('sorting', () => {
+	let cookie;
+
+	before(async () => {
+		({cookie} = await login('test@dxw.com'));
+	});
+
+	it('sorts by name A–Z by default', async () => {
+		const html = await (await get('/', cookie)).text();
+
+		assert.ok(html.indexOf('#quiet-channel') < html.indexOf('#test-channel'));
+	});
+
+	it('sorts by most messages first', async () => {
+		const html = await (await get('/?sort=messages&dir=desc', cookie)).text();
+
+		// #test-channel has 1 message in the last 30 days; #quiet-channel has none.
+		assert.ok(html.indexOf('#test-channel') < html.indexOf('#quiet-channel'));
+		assert.ok(html.includes('aria-sort="descending"'));
+	});
+
+	it('keeps the sort when changing page', async () => {
+		const html = await (await get('/?sort=messages&dir=desc', cookie)).text();
+
+		assert.ok(html.includes('href="/?sort=messages&amp;dir=desc&amp;page=2"'));
 	});
 });
 
@@ -186,12 +277,14 @@ describe('when Slack fails', () => {
 	before(async () => {
 		({cookie} = await login('test@dxw.com'));
 		slackFails = true;
-		clearChannelCache();
+		resetChannelData();
+		await refreshChannels({token: 'xoxb-test', pauseMs: 0});
 	});
 
-	after(() => {
+	after(async () => {
 		slackFails = false;
-		clearChannelCache();
+		resetChannelData();
+		await refreshChannels({token: 'xoxb-test', pauseMs: 0});
 	});
 
 	it('shows an error with a 502 status', async () => {
