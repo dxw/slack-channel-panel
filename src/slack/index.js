@@ -3,6 +3,7 @@
 
 import {
 	listChannels,
+	getOwnTeamId,
 	joinChannel,
 	fetchRecentMessages,
 	toChannel,
@@ -71,8 +72,16 @@ export const refreshChannels = async ({
 		state.channels = channels;
 		state.error = null;
 
+		// Only check channels the bot is in, or can join. It joins Slack Connect
+		// channels only if they're hosted by our own organisation, never ones
+		// another organisation owns and has shared with us.
+		const ownTeamId = joinChannels ? await getOwnTeamId(token) : null;
+		const canJoin = (channel) =>
+			joinChannels &&
+			(!channel.isExternal || channel.hostTeamId === ownTeamId);
 		const toCheck = channels.filter(
-			(channel) => !channel.isArchived && (channel.isMember || joinChannels),
+			(channel) =>
+				!channel.isArchived && (channel.isMember || canJoin(channel)),
 		);
 		state.progress = {done: 0, total: toCheck.length};
 		console.log(

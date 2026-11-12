@@ -41,6 +41,7 @@ const messages = {
  */
 const fakeSlack = (overrides = {}) => {
 	const handlers = {
+		'auth.test': () => ({team_id: 'T_OURS'}),
 		'conversations.list': () => ({channels, response_metadata: {}}),
 		'conversations.join': () => ({}),
 		'conversations.history': (params) => ({
@@ -94,9 +95,49 @@ describe('refreshChannels', () => {
 
 		assert.deepEqual(calls(fetch), [
 			'conversations.list',
+			'auth.test',
 			'conversations.history C1',
 			'conversations.join C2',
 			'conversations.history C2',
+		]);
+	});
+
+	it('only joins Slack Connect channels hosted by our own organisation', async () => {
+		const fetch = fakeSlack({
+			'conversations.list': () => ({
+				channels: [
+					slackChannel('C4', 'hosted-by-us', {
+						is_member: false,
+						is_ext_shared: true,
+						conversation_host_id: 'T_OURS',
+					}),
+					slackChannel('C5', 'hosted-elsewhere', {
+						is_member: false,
+						is_ext_shared: true,
+						conversation_host_id: 'T_THEIRS',
+					}),
+					slackChannel('C6', 'no-host-given', {
+						is_member: false,
+						is_ext_shared: true,
+					}),
+					slackChannel('C7', 'elsewhere-member', {
+						is_ext_shared: true,
+						conversation_host_id: 'T_THEIRS',
+					}),
+				],
+				response_metadata: {},
+			}),
+			'conversations.history': () => ({messages: []}),
+		});
+
+		await refresh({joinChannels: true});
+
+		assert.deepEqual(calls(fetch), [
+			'conversations.list',
+			'auth.test',
+			'conversations.join C4',
+			'conversations.history C4',
+			'conversations.history C7',
 		]);
 	});
 

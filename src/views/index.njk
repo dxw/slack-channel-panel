@@ -70,6 +70,8 @@
                             {{ sortHeader('Members', sortLinks.members, 'hidden w-24 px-2 py-3 text-right sm:px-4 md:table-cell') }}
                         {% endif %}
                         <th scope="col" class="hidden px-2 py-3 sm:table-cell sm:px-4">Description</th>
+                        {# TEMP: for checking which organisation hosts each channel. Remove when done. #}
+                        <th scope="col" class="hidden w-28 px-2 py-3 sm:px-4 md:table-cell">Host ID</th>
                         {% if archivedTab %}
                             {{ sortHeader('Archived', sortLinks.archived, 'w-28 px-2 py-3 sm:px-4') }}
                         {% else %}
@@ -86,7 +88,14 @@
                         <tr>
                             <td class="px-2 py-3 font-medium sm:px-4">
                                 {# Long names are cut off with "…"; hover to see the full name. #}
-                                <div class="truncate" title="#{{ channel.name }}">#{{ channel.name }}</div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="truncate" title="#{{ channel.name }}">#{{ channel.name }}</span>
+                                    {% if channel.isExternal %}
+                                        {# Slack Connect channel. The badge doesn't shrink, so long names are cut off before it. #}
+                                        <span class="shrink-0 rounded border border-purple-200 bg-purple-50 px-1 text-[10px] leading-4 font-medium text-purple-700 uppercase"
+                                            title="Slack Connect: shared with another organisation">Ext</span>
+                                    {% endif %}
+                                </div>
                             </td>
                             {% if not archivedTab %}
                                 <td class="hidden px-2 py-3 text-right tabular-nums sm:px-4 md:table-cell">{{ channel.memberCount }}</td>
@@ -95,6 +104,8 @@
                                 {# Wraps onto at most 2 lines, then "…"; hover to see it all. #}
                                 <div class="line-clamp-2 break-words" title="{{ channel.purpose }}">{{ channel.purpose }}</div>
                             </td>
+                            {# TEMP: host ID column. Remove when done. #}
+                            <td class="hidden px-2 py-3 font-mono text-xs text-gray-600 sm:px-4 md:table-cell">{{ channel.hostTeamId or '—' }}</td>
                             {% if archivedTab %}
                                 <td class="px-2 py-3 whitespace-nowrap text-gray-600 sm:px-4">
                                     {% if channel.archivedAt %}
@@ -141,7 +152,7 @@
                         </tr>
                     {% else %}
                         <tr>
-                            <td colspan="{{ 3 if archivedTab else 6 }}" class="px-4 py-6 text-center text-gray-500">No {{ status }} channels.</td>
+                            <td colspan="{{ 4 if archivedTab else 7 }}" class="px-4 py-6 text-center text-gray-500">No {{ status }} channels.</td>
                         </tr>
                     {% endfor %}
                 </tbody>

@@ -33,6 +33,8 @@ export const fakeChannels = names.map((name, i) => ({
 	name,
 	is_archived: name === 'old-website' || name === 'hackday-2019',
 	is_member: true,
+	// A Slack Connect channel, shared with another organisation.
+	is_ext_shared: name === 'project-borealis',
 	num_members: ((i * 37) % 120) + 1,
 	topic: {value: ''},
 	purpose: {value: `A made-up channel for ${name.replaceAll('-', ' ')}`},

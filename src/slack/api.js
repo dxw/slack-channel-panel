@@ -9,6 +9,11 @@ const MAX_RETRIES = 3; // number of retries after being rate limited by Slack
  * @property {string} name
  * @property {boolean} isArchived
  * @property {boolean} isMember Whether the Slack bot is in the channel.
+ * @property {boolean} isExternal Whether it's a Slack Connect channel, shared
+ *   (or being shared) with another organisation.
+ * @property {string | null} hostTeamId The ID of the Slack team (organisation)
+ *   that owns the channel. For Slack Connect channels this may be another
+ *   organisation's.
  * @property {number} memberCount Members, not counting the Slack bot.
  * @property {string} topic
  * @property {string} purpose
@@ -29,6 +34,8 @@ export const toChannel = (channel) => {
 		name: channel.name,
 		isArchived: channel.is_archived ?? false,
 		isMember,
+		isExternal: Boolean(channel.is_ext_shared || channel.is_pending_ext_shared),
+		hostTeamId: channel.conversation_host_id ?? null,
 		memberCount: Math.max((channel.num_members ?? 0) - (isMember ? 1 : 0), 0),
 		topic: channel.topic?.value ?? '',
 		purpose: channel.purpose?.value ?? '',
@@ -120,6 +127,17 @@ export const listChannels = async (token) => {
 	} while (cursor);
 
 	return channels;
+};
+
+/**
+ * Returns the ID of the Slack team (organisation) the bot is installed in.
+ * Needs no extra scopes.
+ * @param {string} token
+ * @returns {Promise<string>}
+ */
+export const getOwnTeamId = async (token) => {
+	const body = await callSlack('auth.test', {}, token);
+	return body.team_id;
 };
 
 /**

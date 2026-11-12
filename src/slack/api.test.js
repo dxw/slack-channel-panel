@@ -42,6 +42,8 @@ describe('toChannel', () => {
 			name: 'general',
 			isArchived: false,
 			isMember: false,
+			isExternal: false,
+			hostTeamId: null,
 			memberCount: 42,
 			topic: 'Company-wide chat',
 			purpose: 'Announcements',
@@ -58,6 +60,24 @@ describe('toChannel', () => {
 		});
 
 		assert.deepEqual(channel.archivedAt, new Date('2023-11-14T22:13:20Z'));
+	});
+
+	it('marks Slack Connect channels as external', () => {
+		assert.equal(
+			toChannel({...slackChannel, is_ext_shared: true}).isExternal,
+			true,
+		);
+		assert.equal(
+			toChannel({...slackChannel, is_pending_ext_shared: true}).isExternal,
+			true,
+		);
+	});
+
+	it('keeps the ID of the organisation hosting the channel', () => {
+		assert.equal(
+			toChannel({...slackChannel, conversation_host_id: 'T123'}).hostTeamId,
+			'T123',
+		);
 	});
 
 	it('does not count our bot as a member', () => {
