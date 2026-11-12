@@ -1,5 +1,9 @@
 // Works out channel activity from Slack messages
-export const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+// A channel is inactive after a week with no messages from people.
+export const WEEK_MS = 7 * DAY_MS;
+// Messages are counted over the last 30 days.
+export const MONTH_MS = 30 * DAY_MS;
 
 // Filter for message subtypes that are classed as acitivty
 const HUMAN_SUBTYPES = new Set([
@@ -11,7 +15,8 @@ const HUMAN_SUBTYPES = new Set([
 /**
  * @typedef {object} Activity
  * @property {Date | null} lastMessageAt Newest message or thread reply from a person.
- * @property {number} messagesLastWeek Top-level messages from people in the last 7 days.
+ * @property {number} messagesLastMonth Top-level messages from people in the last
+ *   30 days. At most 100, as only the newest 100 messages are fetched.
  */
 
 /**
@@ -48,8 +53,8 @@ export const summariseActivity = (messages, now = Date.now()) => {
 
 	return {
 		lastMessageAt: human.length ? new Date(latestMs) : null,
-		messagesLastWeek: human.filter(
-			(message) => now - tsToMs(message.ts) < WEEK_MS,
+		messagesLastMonth: human.filter(
+			(message) => now - tsToMs(message.ts) < MONTH_MS,
 		).length,
 	};
 };

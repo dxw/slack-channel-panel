@@ -36,24 +36,27 @@ describe('isHumanMessage', () => {
 });
 
 describe('summariseActivity', () => {
-	it('finds the last message and counts the last 7 days', () => {
-		const activity = summariseActivity([post(1), post(3), post(10)], now);
+	it('finds the last message and counts the last 30 days', () => {
+		const activity = summariseActivity(
+			[post(1), post(10), post(29), post(30), post(45)],
+			now,
+		);
 
 		assert.deepEqual(activity, {
 			lastMessageAt: new Date(now - DAY_MS),
-			messagesLastWeek: 2,
+			messagesLastMonth: 3,
 		});
 	});
 
 	it('ignores messages that are not from people', () => {
 		const activity = summariseActivity(
-			[post(0, {subtype: 'channel_join'}), post(0, {bot_id: 'B1'}), post(20)],
+			[post(0, {subtype: 'channel_join'}), post(0, {bot_id: 'B1'}), post(40)],
 			now,
 		);
 
 		assert.deepEqual(activity, {
-			lastMessageAt: new Date(now - 20 * DAY_MS),
-			messagesLastWeek: 0,
+			lastMessageAt: new Date(now - 40 * DAY_MS),
+			messagesLastMonth: 0,
 		});
 	});
 
@@ -69,7 +72,7 @@ describe('summariseActivity', () => {
 	it('returns no last message when no person has posted', () => {
 		assert.deepEqual(
 			summariseActivity([post(1, {subtype: 'channel_join'})], now),
-			{lastMessageAt: null, messagesLastWeek: 0},
+			{lastMessageAt: null, messagesLastMonth: 0},
 		);
 	});
 });
@@ -78,20 +81,20 @@ describe('isInactive', () => {
 	it('is true when the last message was 7 or more days ago', () => {
 		assert.ok(
 			isInactive(
-				{lastMessageAt: new Date(now - 7 * DAY_MS), messagesLastWeek: 0},
+				{lastMessageAt: new Date(now - 7 * DAY_MS), messagesLastMonth: 0},
 				now,
 			),
 		);
 	});
 
 	it('is true when no person has ever posted', () => {
-		assert.ok(isInactive({lastMessageAt: null, messagesLastWeek: 0}, now));
+		assert.ok(isInactive({lastMessageAt: null, messagesLastMonth: 0}, now));
 	});
 
 	it('is false when there was a message in the last 7 days', () => {
 		assert.ok(
 			!isInactive(
-				{lastMessageAt: new Date(now - 6 * DAY_MS), messagesLastWeek: 1},
+				{lastMessageAt: new Date(now - 6 * DAY_MS), messagesLastMonth: 1},
 				now,
 			),
 		);

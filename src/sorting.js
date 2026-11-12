@@ -37,7 +37,7 @@ export const SORT_COLUMNS = {
 		firstDirection: 'desc',
 	},
 	messages: {
-		value: (channel) => channel.activity?.messagesLastWeek ?? null,
+		value: (channel) => channel.activity?.messagesLastMonth ?? null,
 		firstDirection: 'desc',
 	},
 	status: {value: statusRank, firstDirection: 'asc'},

@@ -13,8 +13,8 @@ const channel = (name, extra = {}) => ({
 	...extra,
 });
 
-const activity = (messagesLastWeek, lastMessageAt) => ({
-	messagesLastWeek,
+const activity = (messagesLastMonth, lastMessageAt) => ({
+	messagesLastMonth,
 	lastMessageAt,
 });
 

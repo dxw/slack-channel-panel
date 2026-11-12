@@ -76,7 +76,7 @@
                             {{ sortHeader('Archived', sortLinks.archived, 'w-28 px-2 py-3 sm:px-4') }}
                         {% else %}
                             {{ sortHeader('Last message', sortLinks.lastMessage, 'w-32 px-2 py-3 sm:px-4') }}
-                            {{ sortHeader('Messages (7 days)', sortLinks.messages, 'hidden w-32 px-2 py-3 text-right sm:px-4 md:table-cell') }}
+                            {{ sortHeader('Messages (30 days)', sortLinks.messages, 'hidden w-32 px-2 py-3 text-right sm:px-4 md:table-cell') }}
                         {% endif %}
                         {% if not archivedTab %}
                             {{ sortHeader('Status', sortLinks.status, 'w-28 px-2 py-3 sm:px-4') }}
@@ -127,10 +127,10 @@
                                 <td class="hidden px-2 py-3 text-right tabular-nums sm:px-4 md:table-cell">
                                     {% if not channel.activity %}
                                         —
-                                    {% elif channel.activity.messagesLastWeek >= 100 %}
+                                    {% elif channel.activity.messagesLastMonth >= 100 %}
                                         100+
                                     {% else %}
-                                        {{ channel.activity.messagesLastWeek }}
+                                        {{ channel.activity.messagesLastMonth }}
                                     {% endif %}
                                 </td>
                             {% endif %}

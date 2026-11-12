@@ -176,7 +176,7 @@ describe('refreshChannels', () => {
 		const [busy, quiet, archived] = data.channels;
 		assert.deepEqual(busy.activity, {
 			lastMessageAt: new Date(now - DAY_MS),
-			messagesLastWeek: 1,
+			messagesLastMonth: 1,
 		});
 		assert.equal(busy.inactive, false);
 		assert.equal(quiet.inactive, true);
@@ -196,7 +196,7 @@ describe('refreshChannels', () => {
 		const [busy, quiet] = getChannelData(now).channels;
 
 		assert.equal(busy.activity, undefined);
-		assert.equal(quiet.activity.messagesLastWeek, 0);
+		assert.equal(quiet.activity.messagesLastMonth, 0);
 	});
 
 	it('keeps the previous channels if listing fails', async () => {
