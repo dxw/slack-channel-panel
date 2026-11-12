@@ -70,8 +70,6 @@
                             {{ sortHeader('Members', sortLinks.members, 'hidden w-24 px-2 py-3 text-right sm:px-4 md:table-cell') }}
                         {% endif %}
                         <th scope="col" class="hidden px-2 py-3 sm:table-cell sm:px-4">Description</th>
-                        {# TEMP: for checking which organisation hosts each channel. Remove when done. #}
-                        <th scope="col" class="hidden w-28 px-2 py-3 sm:px-4 md:table-cell">Host ID</th>
                         {% if archivedTab %}
                             {{ sortHeader('Archived', sortLinks.archived, 'w-28 px-2 py-3 sm:px-4') }}
                         {% else %}
@@ -104,8 +102,6 @@
                                 {# Wraps onto at most 2 lines, then "…"; hover to see it all. #}
                                 <div class="line-clamp-2 break-words" title="{{ channel.purpose }}">{{ channel.purpose }}</div>
                             </td>
-                            {# TEMP: host ID column. Remove when done. #}
-                            <td class="hidden px-2 py-3 font-mono text-xs text-gray-600 sm:px-4 md:table-cell">{{ channel.hostTeamId or '—' }}</td>
                             {% if archivedTab %}
                                 <td class="px-2 py-3 whitespace-nowrap text-gray-600 sm:px-4">
                                     {% if channel.archivedAt %}
