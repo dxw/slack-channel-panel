@@ -318,8 +318,13 @@ describe('signing out', () => {
 
 describe('archiving a channel', () => {
 	let cookie;
+	// The table row for a channel. Skips everything before the first row, so
+	// a message like "#name archived." above the table isn't mistaken for one.
 	const rowFor = (html, name) =>
-		html.split('<tr>').find((row) => row.includes(`#${name}`));
+		html
+			.split('<tr>')
+			.slice(1)
+			.find((row) => row.includes(`#${name}`));
 
 	before(async () => {
 		({cookie} = await login('test@dxw.com'));
