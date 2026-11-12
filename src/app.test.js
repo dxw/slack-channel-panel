@@ -67,6 +67,19 @@ const slackResponses = {
 			{type: 'message', user: 'U1', ts: String(nowSeconds - DAY_SECONDS)},
 		],
 	},
+	// Checked again with Slack just before archiving.
+	'conversations.info C789': {
+		channel: {
+			id: 'C789',
+			name: 'quiet-channel',
+			is_archived: false,
+			is_member: true,
+			num_members: 3,
+			topic: {value: ''},
+			purpose: {value: 'Nobody posts here'},
+			created: 1_600_000_000,
+		},
+	},
 	'conversations.history C789': {
 		messages: [
 			{type: 'message', user: 'U1', ts: String(nowSeconds - 30 * DAY_SECONDS)},

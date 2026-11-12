@@ -7,6 +7,7 @@ import {
 	startChannelRefresh,
 	isArchivable,
 	archiveChannelById,
+	NotArchivableError,
 } from './index.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -46,6 +47,13 @@ const fakeSlack = (overrides = {}) => {
 		'auth.test': () => ({team_id: 'T_OURS'}),
 		'conversations.list': () => ({channels, response_metadata: {}}),
 		'conversations.join': () => ({}),
+		// The bot has joined every channel by the time we ask about one.
+		'conversations.info': (params) => ({
+			channel: {
+				...channels.find((c) => c.id === params.get('channel')),
+				is_member: true,
+			},
+		}),
 		'conversations.history': (params) => ({
 			messages: messages[params.get('channel')],
 		}),
@@ -291,11 +299,26 @@ describe('archiveChannelById', () => {
 		await archiveChannelById({id: 'C2', token: 'xoxb-test', now});
 		const quiet = getChannelData(now).channels.find((c) => c.id === 'C2');
 
-		assert.ok(calls(fetch).includes('conversations.archive C2'));
+		assert.equal(calls(fetch).at(-1), 'conversations.archive C2');
 		assert.equal(quiet.isArchived, true);
 		assert.equal(quiet.archivedAt.getTime(), now);
 		assert.equal(quiet.activity, undefined);
 		assert.equal(quiet.canArchive, false);
+	});
+
+	it('checks the channel with Slack first', async () => {
+		const fetch = fakeSlack({'conversations.archive': () => ({})});
+		await refresh();
+		fetch.mock.resetCalls();
+
+		await archiveChannelById({id: 'C2', token: 'xoxb-test', now});
+
+		assert.deepEqual(calls(fetch), [
+			'conversations.info C2',
+			'conversations.history C2',
+			'auth.test',
+			'conversations.archive C2',
+		]);
 	});
 
 	it('refuses a channel the dashboard does not offer to archive', async () => {
@@ -304,9 +327,65 @@ describe('archiveChannelById', () => {
 
 		await assert.rejects(
 			archiveChannelById({id: 'C1', token: 'xoxb-test', now}),
-			/can’t be archived/,
+			NotArchivableError,
 		);
 		assert.ok(!calls(fetch).includes('conversations.archive C1'));
+	});
+
+	it('refuses a channel that has had a message since the last refresh', async () => {
+		let newMessage = false;
+		const fetch = fakeSlack({
+			'conversations.history': (params) => ({
+				messages: newMessage
+					? [{type: 'message', user: 'U1', ts: daysAgo(0.1)}]
+					: messages[params.get('channel')],
+			}),
+		});
+		await refresh();
+		newMessage = true;
+
+		await assert.rejects(
+			archiveChannelById({id: 'C2', token: 'xoxb-test', now}),
+			NotArchivableError,
+		);
+		const quiet = getChannelData(now).channels.find((c) => c.id === 'C2');
+		assert.ok(!calls(fetch).includes('conversations.archive C2'));
+		assert.equal(quiet.isArchived, false);
+		assert.equal(quiet.inactive, false);
+		assert.equal(quiet.canArchive, false);
+	});
+
+	it('refuses a small channel that has gained members since the last refresh', async () => {
+		const tiny = slackChannel('C8', 'tiny', {num_members: 2});
+		const fetch = fakeSlack({
+			'conversations.list': () => ({channels: [tiny], response_metadata: {}}),
+			'conversations.history': () => ({messages: messages.C1}),
+			'conversations.info': () => ({channel: {...tiny, num_members: 4}}),
+		});
+		await refresh();
+		assert.equal(getChannelData(now).channels[0].canArchive, true);
+
+		await assert.rejects(
+			archiveChannelById({id: 'C8', token: 'xoxb-test', now}),
+			NotArchivableError,
+		);
+		const [stored] = getChannelData(now).channels;
+		assert.ok(!calls(fetch).includes('conversations.archive C8'));
+		assert.equal(stored.memberCount, 3);
+		assert.equal(stored.canArchive, false);
+	});
+
+	it('refuses if it cannot check the channel with Slack', async () => {
+		const fetch = fakeSlack({
+			'conversations.info': () => ({ok: false, error: 'ratelimited'}),
+		});
+		await refresh();
+
+		await assert.rejects(
+			archiveChannelById({id: 'C2', token: 'xoxb-test', now}),
+			/ratelimited/,
+		);
+		assert.ok(!calls(fetch).includes('conversations.archive C2'));
 	});
 
 	it('leaves the channel active if Slack refuses', async () => {

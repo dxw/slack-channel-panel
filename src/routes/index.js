@@ -3,6 +3,7 @@ import {
 	getChannelData,
 	getChannel,
 	archiveChannelById,
+	NotArchivableError,
 } from '../slack/index.js';
 import {paginate} from '../pagination.js';
 import {SORT_COLUMNS, SORTABLE_ON_TAB, sortChannels} from '../sorting.js';
@@ -136,7 +137,10 @@ router.post('/channels/:id/archive', async (req, res) => {
 		console.error(`Couldn’t archive #${channel.name}: ${error.message}`);
 		req.session.notice = {
 			type: 'error',
-			text: `Couldn’t archive #${channel.name}. Try again, or archive it in Slack.`,
+			text:
+				error instanceof NotArchivableError
+					? `#${channel.name} wasn’t archived: it has had new messages or members since the dashboard last checked.`
+					: `Couldn’t archive #${channel.name}. Try again, or archive it in Slack.`,
 		};
 	}
 	res.redirect('/');

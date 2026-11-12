@@ -6,6 +6,7 @@ import {
 	getOwnTeamId,
 	joinChannel,
 	archiveChannel,
+	getChannelInfo,
 	fetchRecentMessages,
 	toChannel,
 } from './api.js';
@@ -255,9 +256,57 @@ export const getChannel = (id, now = Date.now()) => {
 };
 
 /**
+ * Thrown when a channel shouldn't be archived from the dashboard, e.g.
+ * because it has had new messages or members since the last refresh.
+ */
+export class NotArchivableError extends Error {
+	constructor() {
+		super('This channel can’t be archived from the dashboard');
+		this.name = 'NotArchivableError';
+	}
+}
+
+/**
+ * Checks with Slack that a channel can still be archived, as the stored data
+ * can be hours old. Updates the stored channel and its activity with what
+ * Slack returns. Throws if Slack can't be checked.
+ * @param {string} token
+ * @param {string} id
+ * @param {number} now Current time in ms.
+ * @returns {Promise<boolean>}
+ */
+const checkStillArchivable = async (token, id, now) => {
+	const [fresh, messages, ownTeamId] = await Promise.all([
+		getChannelInfo(token, id),
+		fetchRecentMessages(token, id),
+		getOwnTeamId(token),
+	]);
+	const activity = summariseActivity(messages, now);
+
+	const index = state.channels.findIndex((c) => c.id === id);
+	if (index !== -1) {
+		state.channels[index] = fresh;
+	}
+	state.activity.set(id, activity);
+	state.ownTeamId = ownTeamId ?? null;
+
+	return isArchivable(
+		{
+			...fresh,
+			inactive: !fresh.isArchived && isInactive(activity, now),
+		},
+		state.ownTeamId,
+	);
+};
+
+/**
  * Archives a channel in Slack, then marks it archived here, so it moves to
- * the Archived tab without waiting for the next refresh. Refuses channels the
- * dashboard doesn't offer to archive. With made-up channels, Slack isn't called.
+ * the Archived tab without waiting for the next refresh.
+ *
+ * Refuses (with NotArchivableError) channels the dashboard doesn't offer to
+ * archive. Before archiving, checks the channel's current members and
+ * messages with Slack, and refuses if it no longer qualifies or if that check
+ * fails. With made-up channels, Slack isn't called.
  * @param {object} options
  * @param {string} options.id The channel's ID.
  * @param {string | undefined} options.token Slack bot token.
@@ -267,11 +316,14 @@ export const getChannel = (id, now = Date.now()) => {
 export const archiveChannelById = async ({id, token, now = Date.now()}) => {
 	const channel = getChannel(id, now);
 	if (!channel?.canArchive) {
-		throw new Error('This channel can’t be archived from the dashboard');
+		throw new NotArchivableError();
 	}
 	if (!state.fake) {
 		if (!token) {
 			throw new Error('SLACK_BOT_TOKEN is not set');
+		}
+		if (!(await checkStillArchivable(token, id, now))) {
+			throw new NotArchivableError();
 		}
 		await archiveChannel(token, id);
 	}

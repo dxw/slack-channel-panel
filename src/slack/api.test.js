@@ -6,6 +6,7 @@ import {
 	listChannels,
 	joinChannel,
 	archiveChannel,
+	getChannelInfo,
 	fetchRecentMessages,
 } from './api.js';
 
@@ -185,6 +186,22 @@ describe('joinChannel', () => {
 		assert.equal(url.pathname, '/api/conversations.join');
 		assert.equal(options.method, 'POST');
 		assert.equal(options.body.get('channel'), 'C123');
+	});
+});
+
+describe('getChannelInfo', () => {
+	it('fetches the channel with its member count', async () => {
+		const fetch = mock.method(globalThis, 'fetch', async () =>
+			Response.json({ok: true, channel: slackChannel}),
+		);
+
+		const channel = await getChannelInfo('xoxb-secret', 'C123');
+
+		const [url] = fetch.mock.calls[0].arguments;
+		assert.equal(url.pathname, '/api/conversations.info');
+		assert.equal(url.searchParams.get('channel'), 'C123');
+		assert.equal(url.searchParams.get('include_num_members'), 'true');
+		assert.equal(channel.memberCount, 42);
 	});
 });
 

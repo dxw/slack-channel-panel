@@ -156,6 +156,22 @@ export const joinChannel = async (token, channelId) => {
 };
 
 /**
+ * Fetches one channel's current details, including its member count.
+ * Needs channels:read.
+ * @param {string} token
+ * @param {string} channelId
+ * @returns {Promise<Channel>}
+ */
+export const getChannelInfo = async (token, channelId) => {
+	const body = await callSlack(
+		'conversations.info',
+		{channel: channelId, include_num_members: 'true'},
+		token,
+	);
+	return toChannel(body.channel);
+};
+
+/**
  * Archives a public channel.
  * Needs channels:manage, and the bot must be in the channel.
  * @param {string} token
