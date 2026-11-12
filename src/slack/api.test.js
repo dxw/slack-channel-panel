@@ -5,6 +5,8 @@ import {
 	callSlack,
 	listChannels,
 	joinChannel,
+	archiveChannel,
+	getChannelInfo,
 	fetchRecentMessages,
 } from './api.js';
 
@@ -41,6 +43,7 @@ describe('toChannel', () => {
 			id: 'C123',
 			name: 'general',
 			isArchived: false,
+			isGeneral: false,
 			isMember: false,
 			isExternal: false,
 			hostTeamId: null,
@@ -77,6 +80,13 @@ describe('toChannel', () => {
 		assert.equal(
 			toChannel({...slackChannel, conversation_host_id: 'T123'}).hostTeamId,
 			'T123',
+		);
+	});
+
+	it('marks the #general channel', () => {
+		assert.equal(
+			toChannel({...slackChannel, is_general: true}).isGeneral,
+			true,
 		);
 	});
 
@@ -174,6 +184,37 @@ describe('joinChannel', () => {
 
 		const [url, options] = fetch.mock.calls[0].arguments;
 		assert.equal(url.pathname, '/api/conversations.join');
+		assert.equal(options.method, 'POST');
+		assert.equal(options.body.get('channel'), 'C123');
+	});
+});
+
+describe('getChannelInfo', () => {
+	it('fetches the channel with its member count', async () => {
+		const fetch = mock.method(globalThis, 'fetch', async () =>
+			Response.json({ok: true, channel: slackChannel}),
+		);
+
+		const channel = await getChannelInfo('xoxb-secret', 'C123');
+
+		const [url] = fetch.mock.calls[0].arguments;
+		assert.equal(url.pathname, '/api/conversations.info');
+		assert.equal(url.searchParams.get('channel'), 'C123');
+		assert.equal(url.searchParams.get('include_num_members'), 'true');
+		assert.equal(channel.memberCount, 42);
+	});
+});
+
+describe('archiveChannel', () => {
+	it('POSTs the channel ID to conversations.archive', async () => {
+		const fetch = mock.method(globalThis, 'fetch', async () =>
+			Response.json({ok: true}),
+		);
+
+		await archiveChannel('xoxb-secret', 'C123');
+
+		const [url, options] = fetch.mock.calls[0].arguments;
+		assert.equal(url.pathname, '/api/conversations.archive');
 		assert.equal(options.method, 'POST');
 		assert.equal(options.body.get('channel'), 'C123');
 	});

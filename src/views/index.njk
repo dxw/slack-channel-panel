@@ -28,6 +28,13 @@
             {{ error }}
         </div>
     {% else %}
+        {% if notice %}
+            {% if notice.type == 'success' %}
+                <div class="mb-4 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800" role="status">{{ notice.text }}</div>
+            {% else %}
+                <div class="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">{{ notice.text }}</div>
+            {% endif %}
+        {% endif %}
         {% if refreshing %}
             <div class="mb-4 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800" role="status">
                 Checking channel activity… {{ progress.done }} of {{ progress.total }}
@@ -73,11 +80,13 @@
                         {% if archivedTab %}
                             {{ sortHeader('Archived', sortLinks.archived, 'w-28 px-2 py-3 sm:px-4') }}
                         {% else %}
-                            {{ sortHeader('Last message', sortLinks.lastMessage, 'w-32 px-2 py-3 sm:px-4') }}
+                            {# Hidden on phones to leave room for the Archive button. #}
+                            {{ sortHeader('Last message', sortLinks.lastMessage, 'hidden w-32 px-2 py-3 sm:table-cell sm:px-4') }}
                             {{ sortHeader('Messages (30 days)', sortLinks.messages, 'hidden w-32 px-2 py-3 text-right sm:px-4 md:table-cell') }}
                         {% endif %}
                         {% if not archivedTab %}
                             {{ sortHeader('Status', sortLinks.status, 'w-28 px-2 py-3 sm:px-4') }}
+                            {{ sortHeader('Archive', sortLinks.archive, 'w-28 px-2 py-3 sm:px-4') }}
                         {% endif %}
                     </tr>
                 </thead>
@@ -85,9 +94,10 @@
                     {% for channel in channels %}
                         <tr>
                             <td class="px-2 py-3 font-medium sm:px-4">
-                                {# Long names are cut off with "…"; hover to see the full name. #}
                                 <div class="flex items-center gap-1.5">
-                                    <span class="truncate" title="#{{ channel.name }}">#{{ channel.name }}</span>
+                                    <a href="{{ channel.slackUrl }}" target="_blank" rel="noopener"
+                                        class="truncate underline decoration-gray-300 underline-offset-2 hover:decoration-gray-900 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900"
+                                        title="Open #{{ channel.name }} in Slack">#{{ channel.name }}<span class="sr-only"> (opens in Slack)</span></a>
                                     {% if channel.isExternal %}
                                         {# Slack Connect channel. The badge doesn't shrink, so long names are cut off before it. #}
                                         <span class="shrink-0 rounded border border-purple-200 bg-purple-50 px-1 text-[10px] leading-4 font-medium text-purple-700 uppercase"
@@ -111,7 +121,7 @@
                                     {% endif %}
                                 </td>
                             {% else %}
-                                <td class="px-2 py-3 whitespace-nowrap text-gray-600 sm:px-4">
+                                <td class="hidden px-2 py-3 whitespace-nowrap text-gray-600 sm:table-cell sm:px-4">
                                     {% if not channel.activity %}
                                         —
                                     {% elif channel.activity.lastMessageAt %}
@@ -132,7 +142,6 @@
                             {% endif %}
                             {% if not archivedTab %}
                             <td class="px-2 py-3 whitespace-nowrap sm:px-4">
-                                {# The Archive button for inactive channels will go here. #}
                                 {% if channel.inactive %}
                                     <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Inactive</span>
                                 {% elif channel.activity %}
@@ -145,11 +154,18 @@
                                     <span class="text-xs text-gray-500">Not checked yet</span>
                                 {% endif %}
                             </td>
+                            <td class="px-2 py-3 text-right sm:px-4">
+                                {# Only for quiet channels that are ours to archive. Goes to a confirmation page first. #}
+                                {% if channel.canArchive %}
+                                    <a href="/channels/{{ channel.id }}/archive"
+                                        class="inline-block rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900">Archive<span class="sr-only"> #{{ channel.name }}</span></a>
+                                {% endif %}
+                            </td>
                             {% endif %}
                         </tr>
                     {% else %}
                         <tr>
-                            <td colspan="{{ 4 if archivedTab else 7 }}" class="px-4 py-6 text-center text-gray-500">No {{ status }} channels.</td>
+                            <td colspan="{{ 3 if archivedTab else 7 }}" class="px-4 py-6 text-center text-gray-500">No {{ status }} channels.</td>
                         </tr>
                     {% endfor %}
                 </tbody>
