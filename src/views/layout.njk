@@ -18,7 +18,11 @@
     <header class="border-b border-gray-200 bg-white">
         <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
             <h1 class="text-xl font-semibold">
-                <a href="/" class="hover:text-gray-600">Slack Channel Panel</a>
+                <a href="/" class="flex items-center gap-3 hover:text-gray-600">
+                    {# Decorative: the name next to it says what it is. #}
+                    <img src="/logo.png" alt="" width="138" height="160" class="h-10 w-auto">
+                    Slack Channel Panel
+                </a>
             </h1>
             {% if user %}
             <form method="post" action="/auth/logout">
