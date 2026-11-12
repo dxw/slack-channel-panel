@@ -197,7 +197,23 @@ export const startChannelRefresh = () => {
 };
 
 /**
- * A stored channel with its activity, and whether it's inactive or archivable.
+ * A link that opens a channel in the Slack app if it's installed, otherwise
+ * in the browser. The team ID makes sure it opens in our workspace.
+ * @param {string} channelId
+ * @param {string | null} teamId
+ */
+export const slackChannelUrl = (channelId, teamId) => {
+	const url = new URL('https://slack.com/app_redirect');
+	url.searchParams.set('channel', channelId);
+	if (teamId) {
+		url.searchParams.set('team', teamId);
+	}
+	return url.toString();
+};
+
+/**
+ * A stored channel with its activity, whether it's inactive or archivable,
+ * and a link to it in Slack.
  * @param {Channel} channel
  * @param {number} now Current time in ms.
  */
@@ -211,6 +227,7 @@ const withActivity = (channel, now) => {
 	return {
 		...withInactive,
 		canArchive: isArchivable(withInactive, state.ownTeamId),
+		slackUrl: slackChannelUrl(channel.id, state.ownTeamId),
 	};
 };
 

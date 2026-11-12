@@ -94,9 +94,10 @@
                     {% for channel in channels %}
                         <tr>
                             <td class="px-2 py-3 font-medium sm:px-4">
-                                {# Long names are cut off with "…"; hover to see the full name. #}
                                 <div class="flex items-center gap-1.5">
-                                    <span class="truncate" title="#{{ channel.name }}">#{{ channel.name }}</span>
+                                    <a href="{{ channel.slackUrl }}" target="_blank" rel="noopener"
+                                        class="truncate underline decoration-gray-300 underline-offset-2 hover:decoration-gray-900 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900"
+                                        title="Open #{{ channel.name }} in Slack">#{{ channel.name }}<span class="sr-only"> (opens in Slack)</span></a>
                                     {% if channel.isExternal %}
                                         {# Slack Connect channel. The badge doesn't shrink, so long names are cut off before it. #}
                                         <span class="shrink-0 rounded border border-purple-200 bg-purple-50 px-1 text-[10px] leading-4 font-medium text-purple-700 uppercase"

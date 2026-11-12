@@ -185,6 +185,10 @@ describe('refreshChannels', () => {
 		assert.equal(quiet.inactive, true);
 		assert.equal(archived.activity, undefined);
 		assert.equal(archived.inactive, false);
+		assert.equal(
+			busy.slackUrl,
+			'https://slack.com/app_redirect?channel=C1&team=T_OURS',
+		);
 	});
 
 	it('carries on if one channel fails', async () => {
