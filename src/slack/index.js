@@ -99,6 +99,7 @@ export const refreshChannels = async ({
 			try {
 				if (!channel.isMember) {
 					await joinChannel(token, channel.id);
+					channel.isMember = true;
 					console.log(`Joined #${channel.name}`);
 				}
 				const messages = await fetchRecentMessages(token, channel.id);
