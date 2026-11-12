@@ -36,8 +36,12 @@
             {% endif %}
         {% endif %}
         {% if refreshing %}
-            <div class="mb-4 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800" role="status">
-                Checking channel activity… {{ progress.done }} of {{ progress.total }}
+            <div class="mb-4 flex items-center gap-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800" role="status">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" class="size-5 shrink-0 animate-spin motion-reduce:animate-none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" class="opacity-25"/>
+                    <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                </svg>
+                <span>Data is refreshing. Please check back in a few minutes.</span>
             </div>
         {% endif %}
 
