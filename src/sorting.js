@@ -21,7 +21,7 @@ const statusRank = (channel) => {
 	if (channel.activity) {
 		return 1;
 	}
-	return channel.isMember ? 3 : 2; // Not checked yet : Bot not in channel
+	return channel.isMember ? 3 : 2; // Not checked yet : Unknown (bot not in channel)
 };
 
 /** @type {Record<string, SortColumn>} */

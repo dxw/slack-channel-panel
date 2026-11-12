@@ -142,8 +142,9 @@
                                 {% elif channel.activity %}
                                     <span class="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800">Active</span>
                                 {% elif not channel.isMember %}
-                                    {# The bot can only read channels it's in. #}
-                                    <span class="text-xs text-gray-500">Bot not in channel</span>
+                                    {# The bot can only read channels it's in, so their activity is unknown. #}
+                                    <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
+                                        title="The bot isn't in this channel, so it can't see the messages">Unknown</span>
                                 {% else %}
                                     <span class="text-xs text-gray-500">Not checked yet</span>
                                 {% endif %}

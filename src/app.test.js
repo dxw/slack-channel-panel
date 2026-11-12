@@ -253,7 +253,7 @@ describe('sorting', () => {
 	it('sorts by most messages first', async () => {
 		const html = await (await get('/?sort=messages&dir=desc', cookie)).text();
 
-		// #test-channel has 1 message this week; #quiet-channel has none.
+		// #test-channel has 1 message in the last 30 days; #quiet-channel has none.
 		assert.ok(html.indexOf('#test-channel') < html.indexOf('#quiet-channel'));
 		assert.ok(html.includes('aria-sort="descending"'));
 	});
