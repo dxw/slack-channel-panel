@@ -15,13 +15,16 @@
  * @param {any} channel
  */
 const statusRank = (channel) => {
-	if (channel.inactive) {
-		return 0;
+	if (channel.memberCount === 0) {
+		return 0; // Empty
 	}
-	if (channel.activity) {
+	if (channel.inactive) {
 		return 1;
 	}
-	return channel.isMember ? 3 : 2; // Not checked yet : Unknown (bot not in channel)
+	if (channel.activity) {
+		return 2;
+	}
+	return channel.isMember ? 4 : 3; // Not checked yet : Unknown (bot not in channel)
 };
 
 /** @type {Record<string, SortColumn>} */

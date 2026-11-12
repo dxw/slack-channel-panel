@@ -146,7 +146,11 @@
                             {% endif %}
                             {% if not archivedTab %}
                             <td class="px-2 py-3 whitespace-nowrap sm:px-4">
-                                {% if channel.inactive %}
+                                {# Nobody in it (not counting the bot): shown over every other status. #}
+                                {% if channel.memberCount == 0 %}
+                                    <span class="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-800"
+                                        title="This channel has no members">Empty</span>
+                                {% elif channel.inactive %}
                                     <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Inactive</span>
                                 {% elif channel.activity %}
                                     <span class="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800">Active</span>

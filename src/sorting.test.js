@@ -85,14 +85,20 @@ describe('sortChannels', () => {
 		]);
 	});
 
-	it('sorts inactive channels first by status', () => {
+	it('sorts empty, then inactive channels first by status', () => {
 		const channels = [
-			channel('active', {activity: activity(3, new Date())}),
-			channel('not-in', {isMember: false}),
-			channel('inactive', {inactive: true, activity: activity(0, null)}),
+			channel('active', {memberCount: 3, activity: activity(3, new Date())}),
+			channel('not-in', {memberCount: 3, isMember: false}),
+			channel('inactive', {
+				memberCount: 3,
+				inactive: true,
+				activity: activity(0, null),
+			}),
+			channel('empty', {inactive: true, activity: activity(0, null)}),
 		];
 
 		assert.deepEqual(names(sortChannels(channels, 'status', 'asc')), [
+			'empty',
 			'inactive',
 			'active',
 			'not-in',
