@@ -1,5 +1,9 @@
 import express from 'express';
-import {getChannelData} from '../slack/index.js';
+import {
+	getChannelData,
+	getChannel,
+	archiveChannelById,
+} from '../slack/index.js';
 import {paginate} from '../pagination.js';
 import {SORT_COLUMNS, SORTABLE_ON_TAB, sortChannels} from '../sorting.js';
 
@@ -43,6 +47,10 @@ router.get('/', (req, res) => {
 			: SORT_COLUMNS[sort].firstDirection;
 
 	const {channels, refreshedAt, refreshing, progress, error} = getChannelData();
+
+	// A one-off message from the last action, e.g. archiving a channel.
+	const notice = req.session.notice;
+	delete req.session.notice;
 
 	// Only show an error if there's nothing else to show.
 	if (error && channels.length === 0) {
@@ -99,7 +107,39 @@ router.get('/', (req, res) => {
 		refreshedAt,
 		refreshing,
 		progress,
+		notice,
 	});
+});
+
+// Asks to confirm before archiving a channel.
+router.get('/channels/:id/archive', (req, res) => {
+	const channel = getChannel(req.params.id);
+	if (!channel?.canArchive) {
+		return res.status(404).render('archive', {channel: null});
+	}
+	res.render('archive', {channel});
+});
+
+// Archives a channel, then goes back to the dashboard with a message.
+router.post('/channels/:id/archive', async (req, res) => {
+	const channel = getChannel(req.params.id);
+	if (!channel?.canArchive) {
+		return res.status(404).render('archive', {channel: null});
+	}
+	try {
+		await archiveChannelById({
+			id: channel.id,
+			token: process.env.SLACK_BOT_TOKEN,
+		});
+		req.session.notice = {type: 'success', text: `#${channel.name} archived.`};
+	} catch (error) {
+		console.error(`Couldn’t archive #${channel.name}: ${error.message}`);
+		req.session.notice = {
+			type: 'error',
+			text: `Couldn’t archive #${channel.name}. Try again, or archive it in Slack.`,
+		};
+	}
+	res.redirect('/');
 });
 
 export default router;

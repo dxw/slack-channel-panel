@@ -78,10 +78,10 @@ describe('summariseActivity', () => {
 });
 
 describe('isInactive', () => {
-	it('is true when the last message was 7 or more days ago', () => {
+	it('is true when the last message was 30 or more days ago', () => {
 		assert.ok(
 			isInactive(
-				{lastMessageAt: new Date(now - 7 * DAY_MS), messagesLastMonth: 0},
+				{lastMessageAt: new Date(now - 30 * DAY_MS), messagesLastMonth: 0},
 				now,
 			),
 		);
@@ -91,10 +91,10 @@ describe('isInactive', () => {
 		assert.ok(isInactive({lastMessageAt: null, messagesLastMonth: 0}, now));
 	});
 
-	it('is false when there was a message in the last 7 days', () => {
+	it('is false when there was a message in the last 30 days', () => {
 		assert.ok(
 			!isInactive(
-				{lastMessageAt: new Date(now - 6 * DAY_MS), messagesLastMonth: 1},
+				{lastMessageAt: new Date(now - 29 * DAY_MS), messagesLastMonth: 1},
 				now,
 			),
 		);

@@ -5,6 +5,8 @@ import {
 	getChannelData,
 	resetChannelData,
 	startChannelRefresh,
+	isArchivable,
+	archiveChannelById,
 } from './index.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -149,6 +151,7 @@ describe('refreshChannels', () => {
 
 		assert.deepEqual(calls(fetch), [
 			'conversations.list',
+			'auth.test',
 			'conversations.history C1',
 		]);
 		assert.equal(quiet.activity, undefined);
@@ -213,6 +216,107 @@ describe('refreshChannels', () => {
 
 		assert.equal(data.channels.length, 3);
 		assert.match(data.error, /invalid_auth/);
+	});
+});
+
+describe('isArchivable', () => {
+	const quietChannel = {
+		isArchived: false,
+		isGeneral: false,
+		isMember: true,
+		isExternal: false,
+		hostTeamId: 'T_OURS',
+		memberCount: 5,
+		inactive: true,
+	};
+
+	it('is true for an inactive channel', () => {
+		assert.ok(isArchivable(quietChannel, 'T_OURS'));
+	});
+
+	it('is true for an active channel with fewer than 2 members', () => {
+		assert.ok(
+			isArchivable(
+				{...quietChannel, inactive: false, memberCount: 1},
+				'T_OURS',
+			),
+		);
+	});
+
+	it('is false for an active channel with 2 or more members', () => {
+		assert.ok(
+			!isArchivable(
+				{...quietChannel, inactive: false, memberCount: 2},
+				'T_OURS',
+			),
+		);
+	});
+
+	it('is false when the bot is not in the channel', () => {
+		assert.ok(!isArchivable({...quietChannel, isMember: false}, 'T_OURS'));
+	});
+
+	it('is true for a Slack Connect channel we host', () => {
+		assert.ok(isArchivable({...quietChannel, isExternal: true}, 'T_OURS'));
+	});
+
+	it('is false for a Slack Connect channel another organisation hosts', () => {
+		assert.ok(
+			!isArchivable(
+				{...quietChannel, isExternal: true, hostTeamId: 'T_THEIRS'},
+				'T_OURS',
+			),
+		);
+	});
+
+	it('is false for a Slack Connect channel when our team is not known', () => {
+		assert.ok(!isArchivable({...quietChannel, isExternal: true}, null));
+	});
+
+	it('is false for #general and archived channels', () => {
+		assert.ok(!isArchivable({...quietChannel, isGeneral: true}, 'T_OURS'));
+		assert.ok(!isArchivable({...quietChannel, isArchived: true}, 'T_OURS'));
+	});
+});
+
+describe('archiveChannelById', () => {
+	it('archives the channel in Slack and marks it archived', async () => {
+		const fetch = fakeSlack({'conversations.archive': () => ({})});
+		await refresh();
+
+		await archiveChannelById({id: 'C2', token: 'xoxb-test', now});
+		const quiet = getChannelData(now).channels.find((c) => c.id === 'C2');
+
+		assert.ok(calls(fetch).includes('conversations.archive C2'));
+		assert.equal(quiet.isArchived, true);
+		assert.equal(quiet.archivedAt.getTime(), now);
+		assert.equal(quiet.activity, undefined);
+		assert.equal(quiet.canArchive, false);
+	});
+
+	it('refuses a channel the dashboard does not offer to archive', async () => {
+		const fetch = fakeSlack();
+		await refresh();
+
+		await assert.rejects(
+			archiveChannelById({id: 'C1', token: 'xoxb-test', now}),
+			/can’t be archived/,
+		);
+		assert.ok(!calls(fetch).includes('conversations.archive C1'));
+	});
+
+	it('leaves the channel active if Slack refuses', async () => {
+		fakeSlack({
+			'conversations.archive': () => ({ok: false, error: 'missing_scope'}),
+		});
+		await refresh();
+
+		await assert.rejects(
+			archiveChannelById({id: 'C2', token: 'xoxb-test', now}),
+			/missing_scope/,
+		);
+		const quiet = getChannelData(now).channels.find((c) => c.id === 'C2');
+		assert.equal(quiet.isArchived, false);
 	});
 });
 

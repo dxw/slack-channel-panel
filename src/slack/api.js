@@ -8,6 +8,8 @@ const MAX_RETRIES = 3; // number of retries after being rate limited by Slack
  * @property {string} id
  * @property {string} name
  * @property {boolean} isArchived
+ * @property {boolean} isGeneral Whether it's the workspace's #general channel,
+ *   which Slack never lets anyone archive.
  * @property {boolean} isMember Whether the Slack bot is in the channel.
  * @property {boolean} isExternal Whether it's a Slack Connect channel, shared
  *   (or being shared) with another organisation.
@@ -33,6 +35,7 @@ export const toChannel = (channel) => {
 		id: channel.id,
 		name: channel.name,
 		isArchived: channel.is_archived ?? false,
+		isGeneral: channel.is_general ?? false,
 		isMember,
 		isExternal: Boolean(channel.is_ext_shared || channel.is_pending_ext_shared),
 		hostTeamId: channel.conversation_host_id ?? null,
@@ -148,6 +151,18 @@ export const getOwnTeamId = async (token) => {
  */
 export const joinChannel = async (token, channelId) => {
 	await callSlack('conversations.join', {channel: channelId}, token, {
+		post: true,
+	});
+};
+
+/**
+ * Archives a public channel.
+ * Needs channels:manage, and the bot must be in the channel.
+ * @param {string} token
+ * @param {string} channelId
+ */
+export const archiveChannel = async (token, channelId) => {
+	await callSlack('conversations.archive', {channel: channelId}, token, {
 		post: true,
 	});
 };

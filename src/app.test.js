@@ -73,6 +73,8 @@ const slackResponses = {
 		],
 	},
 };
+// The channel IDs sent to conversations.archive.
+const archivedIds = [];
 const realFetch = globalThis.fetch;
 mock.method(globalThis, 'fetch', async (url, options) => {
 	if (!String(url).startsWith('https://slack.com/')) {
@@ -82,6 +84,9 @@ mock.method(globalThis, 'fetch', async (url, options) => {
 	const channel = url.searchParams.get('channel');
 	if (slackFails) {
 		return Response.json({ok: false, error: 'invalid_auth'});
+	}
+	if (method === 'conversations.archive') {
+		archivedIds.push(options.body.get('channel'));
 	}
 	const body = slackResponses[channel ? `${method} ${channel}` : method] ?? {
 		messages: [],
@@ -198,7 +203,7 @@ describe('when signed in', () => {
 		);
 	});
 
-	it('marks channels with no messages in 7 days as inactive', async () => {
+	it('marks channels with no messages in 30 days as inactive', async () => {
 		const html = await (await get('/', cookie)).text();
 		const rowFor = (name) =>
 			html.split('<tr>').find((row) => row.includes(`#${name}`));
@@ -308,5 +313,70 @@ describe('signing out', () => {
 		const home = await get('/', cookie);
 		assert.equal(home.status, 302);
 		assert.equal(home.headers.get('location'), '/auth/login');
+	});
+});
+
+describe('archiving a channel', () => {
+	let cookie;
+	const rowFor = (html, name) =>
+		html.split('<tr>').find((row) => row.includes(`#${name}`));
+
+	before(async () => {
+		({cookie} = await login('test@dxw.com'));
+	});
+
+	after(async () => {
+		resetChannelData();
+		await refreshChannels({token: 'xoxb-test', pauseMs: 0});
+	});
+
+	it('offers to archive inactive channels and ones with fewer than 2 members', async () => {
+		const html = await (await get('/', cookie)).text();
+
+		assert.ok(rowFor(html, 'quiet-channel').includes('/channels/C789/archive'));
+		assert.ok(rowFor(html, 'zz-channel-00').includes('/channels/CZ0/archive'));
+		assert.ok(!rowFor(html, 'test-channel').includes('Archive'));
+	});
+
+	it('asks to confirm first', async () => {
+		const res = await get('/channels/C789/archive', cookie);
+		const html = await res.text();
+
+		assert.equal(res.status, 200);
+		assert.ok(html.includes('Archive #quiet-channel?'));
+		assert.ok(html.includes('action="/channels/C789/archive"'));
+	});
+
+	it('does not offer to archive an active channel', async () => {
+		const res = await get('/channels/C123/archive', cookie);
+
+		assert.equal(res.status, 404);
+	});
+
+	it('refuses to archive an active channel', async () => {
+		const res = await post('/channels/C123/archive', {cookie});
+
+		assert.equal(res.status, 404);
+		assert.ok(!archivedIds.includes('C123'));
+	});
+
+	it('archives the channel and moves it to the Archived tab', async () => {
+		const res = await post('/channels/C789/archive', {cookie});
+		assert.equal(res.status, 302);
+		assert.equal(res.headers.get('location'), '/');
+		assert.deepEqual(archivedIds, ['C789']);
+
+		const active = await (await get('/', cookie)).text();
+		assert.ok(active.includes('#quiet-channel archived.'));
+		assert.ok(!rowFor(active, 'quiet-channel'));
+
+		const archived = await (await get('/?status=archived', cookie)).text();
+		assert.ok(archived.includes('#quiet-channel'));
+	});
+
+	it('shows the message only once', async () => {
+		const html = await (await get('/', cookie)).text();
+
+		assert.ok(!html.includes('#quiet-channel archived.'));
 	});
 });

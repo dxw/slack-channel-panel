@@ -28,14 +28,27 @@ const names = [
 	'music',
 ];
 
+/** The made-up ID of our own Slack team (organisation). */
+export const FAKE_TEAM_ID = 'TFAKE';
+
 export const fakeChannels = names.map((name, i) => ({
 	id: `CFAKE${String(i).padStart(4, '0')}`,
 	name,
 	is_archived: name === 'old-website' || name === 'hackday-2019',
+	is_general: name === 'general',
 	is_member: true,
-	// A Slack Connect channel, shared with another organisation.
-	is_ext_shared: name === 'project-borealis',
-	num_members: ((i * 37) % 120) + 1,
+	// Slack Connect channels: #project-borealis is hosted by another
+	// organisation, and #design is hosted by us.
+	is_ext_shared: name === 'project-borealis' || name === 'design',
+	conversation_host_id: name === 'project-borealis' ? 'TOTHER' : FAKE_TEAM_ID,
+	// #pets is small but busy, and #project-borealis small but not ours, so
+	// neither can be archived; #general can never be archived.
+	num_members:
+		name === 'pets'
+			? 2
+			: name === 'project-borealis'
+				? 2
+				: ((i * 37) % 120) + 1,
 	topic: {value: ''},
 	purpose: {value: `A made-up channel for ${name.replaceAll('-', ' ')}`},
 	created: NOW_SECONDS - (i + 1) * 90 * DAY_SECONDS,
@@ -83,7 +96,7 @@ const posts = (recentPosts, lastPostDaysAgo) =>
 
 /**
  * Made-up recent messages for each channel, keyed by channel ID.
- * Some are busy, some quiet, and some inactive (nothing from people in 7 days).
+ * Some are busy, some quiet, and some inactive (nothing from people in 30 days).
  * @type {Record<string, object[]>}
  */
 export const fakeMessages = Object.fromEntries(

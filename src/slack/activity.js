@@ -1,8 +1,7 @@
 // Works out channel activity from Slack messages
 const DAY_MS = 24 * 60 * 60 * 1000;
-// A channel is inactive after a week with no messages from people.
-export const WEEK_MS = 7 * DAY_MS;
-// Messages are counted over the last 30 days.
+// Messages are counted over the last 30 days, and a channel is inactive
+// after 30 days with no messages from people.
 export const MONTH_MS = 30 * DAY_MS;
 
 // Filter for message subtypes that are classed as acitivty
@@ -60,7 +59,7 @@ export const summariseActivity = (messages, now = Date.now()) => {
 };
 
 /**
- * Whether a channel has had no messages from people in the last 7 days.
+ * Whether a channel has had no messages from people in the last 30 days.
  * False if we don't know the channel's activity yet.
  * @param {Activity | undefined} activity
  * @param {number} [now] Current time in ms.
@@ -68,4 +67,4 @@ export const summariseActivity = (messages, now = Date.now()) => {
 export const isInactive = (activity, now = Date.now()) =>
 	activity !== undefined &&
 	(activity.lastMessageAt === null ||
-		now - activity.lastMessageAt.getTime() >= WEEK_MS);
+		now - activity.lastMessageAt.getTime() >= MONTH_MS);

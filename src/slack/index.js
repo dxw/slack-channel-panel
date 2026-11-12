@@ -5,11 +5,12 @@ import {
 	listChannels,
 	getOwnTeamId,
 	joinChannel,
+	archiveChannel,
 	fetchRecentMessages,
 	toChannel,
 } from './api.js';
 import {summariseActivity, isInactive} from './activity.js';
-import {fakeChannels, fakeMessages} from './fake-channels.js';
+import {fakeChannels, fakeMessages, FAKE_TEAM_ID} from './fake-channels.js';
 
 const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 // conversations.history allows about 50 calls a minute, so pause between channels.
@@ -29,6 +30,10 @@ const emptyState = () => ({
 	progress: {done: 0, total: 0},
 	/** @type {string | null} */
 	error: null,
+	/** The ID of our own Slack team (organisation). @type {string | null} */
+	ownTeamId: null,
+	/** Whether the channels are made up, so archiving shouldn't call Slack. */
+	fake: false,
 });
 
 let state = emptyState();
@@ -42,6 +47,30 @@ export const resetChannelData = () => {
  * @param {number} ms
  */
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Whether a channel belongs to our organisation: not Slack Connect, or a Slack
+ * Connect channel we host.
+ * @param {Channel} channel
+ * @param {string | null} ownTeamId
+ */
+const isOurs = (channel, ownTeamId) =>
+	!channel.isExternal ||
+	(ownTeamId !== null && channel.hostTeamId === ownTeamId);
+
+/**
+ * Whether the dashboard offers to archive a channel: it's quiet (inactive, or
+ * fewer than 2 members), the bot is in it (so we know its activity, and Slack
+ * lets the bot archive it), and it's ours to archive.
+ * @param {Channel & {inactive: boolean}} channel
+ * @param {string | null} ownTeamId
+ */
+export const isArchivable = (channel, ownTeamId) =>
+	!channel.isArchived &&
+	!channel.isGeneral &&
+	channel.isMember &&
+	isOurs(channel, ownTeamId) &&
+	(channel.inactive || channel.memberCount < 2);
 
 /**
  * Fetches all channels, then each active channel's recent messages. Results
@@ -71,14 +100,14 @@ export const refreshChannels = async ({
 		const channels = await listChannels(token);
 		state.channels = channels;
 		state.error = null;
+		// Needed to tell which Slack Connect channels are ours to join or archive.
+		const ownTeamId = await getOwnTeamId(token);
+		state.ownTeamId = ownTeamId ?? null;
 
 		// Only check channels the bot is in, or can join. It joins Slack Connect
 		// channels only if they're hosted by our own organisation, never ones
 		// another organisation owns and has shared with us.
-		const ownTeamId = joinChannels ? await getOwnTeamId(token) : null;
-		const canJoin = (channel) =>
-			joinChannels &&
-			(!channel.isExternal || channel.hostTeamId === ownTeamId);
+		const canJoin = (channel) => joinChannels && isOurs(channel, ownTeamId);
 		const toCheck = channels.filter(
 			(channel) =>
 				!channel.isArchived && (channel.isMember || canJoin(channel)),
@@ -136,6 +165,8 @@ const loadFakeChannels = () => {
 	}
 	state.refreshedAt = new Date();
 	state.error = null;
+	state.ownTeamId = FAKE_TEAM_ID;
+	state.fake = true;
 };
 
 /**
@@ -166,20 +197,72 @@ export const startChannelRefresh = () => {
 };
 
 /**
+ * A stored channel with its activity, and whether it's inactive or archivable.
+ * @param {Channel} channel
+ * @param {number} now Current time in ms.
+ */
+const withActivity = (channel, now) => {
+	const activity = state.activity.get(channel.id);
+	const withInactive = {
+		...channel,
+		activity,
+		inactive: !channel.isArchived && isInactive(activity, now),
+	};
+	return {
+		...withInactive,
+		canArchive: isArchivable(withInactive, state.ownTeamId),
+	};
+};
+
+/**
  * Returns the stored channels, each with its activity.
  * @param {number} [now] Current time in ms.
  */
 export const getChannelData = (now = Date.now()) => ({
-	channels: state.channels.map((channel) => {
-		const activity = state.activity.get(channel.id);
-		return {
-			...channel,
-			activity,
-			inactive: !channel.isArchived && isInactive(activity, now),
-		};
-	}),
+	channels: state.channels.map((channel) => withActivity(channel, now)),
 	refreshedAt: state.refreshedAt,
 	refreshing: state.refreshing,
 	progress: {...state.progress},
 	error: state.error,
 });
+
+/**
+ * Returns one stored channel with its activity, or undefined if there's none
+ * with that ID.
+ * @param {string} id
+ * @param {number} [now] Current time in ms.
+ */
+export const getChannel = (id, now = Date.now()) => {
+	const channel = state.channels.find((c) => c.id === id);
+	return channel && withActivity(channel, now);
+};
+
+/**
+ * Archives a channel in Slack, then marks it archived here, so it moves to
+ * the Archived tab without waiting for the next refresh. Refuses channels the
+ * dashboard doesn't offer to archive. With made-up channels, Slack isn't called.
+ * @param {object} options
+ * @param {string} options.id The channel's ID.
+ * @param {string | undefined} options.token Slack bot token.
+ * @param {number} [options.now] Current time in ms.
+ * @returns {Promise<Channel>} The archived channel.
+ */
+export const archiveChannelById = async ({id, token, now = Date.now()}) => {
+	const channel = getChannel(id, now);
+	if (!channel?.canArchive) {
+		throw new Error('This channel can’t be archived from the dashboard');
+	}
+	if (!state.fake) {
+		if (!token) {
+			throw new Error('SLACK_BOT_TOKEN is not set');
+		}
+		await archiveChannel(token, id);
+	}
+
+	const stored = state.channels.find((c) => c.id === id);
+	stored.isArchived = true;
+	stored.archivedAt = new Date(now);
+	state.activity.delete(id);
+	console.log(`Archived #${stored.name}`);
+	return stored;
+};
