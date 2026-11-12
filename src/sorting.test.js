@@ -99,6 +99,25 @@ describe('sortChannels', () => {
 		]);
 	});
 
+	it('sorts channels that can be archived first', () => {
+		const channels = [
+			channel('a'),
+			channel('b', {canArchive: true}),
+			channel('c'),
+		];
+
+		assert.deepEqual(names(sortChannels(channels, 'archive', 'asc')), [
+			'b',
+			'a',
+			'c',
+		]);
+		assert.deepEqual(names(sortChannels(channels, 'archive', 'desc')), [
+			'a',
+			'c',
+			'b',
+		]);
+	});
+
 	it('sorts by name when values are equal', () => {
 		const channels = [
 			channel('b', {memberCount: 5}),

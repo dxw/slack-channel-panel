@@ -41,6 +41,11 @@ export const SORT_COLUMNS = {
 		firstDirection: 'desc',
 	},
 	status: {value: statusRank, firstDirection: 'asc'},
+	// Channels that can be archived first.
+	archive: {
+		value: (channel) => (channel.canArchive ? 0 : 1),
+		firstDirection: 'asc',
+	},
 	archived: {
 		value: (channel) => channel.archivedAt?.getTime() ?? null,
 		firstDirection: 'desc',
@@ -49,7 +54,7 @@ export const SORT_COLUMNS = {
 
 /** Which columns can be sorted on each tab. */
 export const SORTABLE_ON_TAB = {
-	active: ['name', 'members', 'lastMessage', 'messages', 'status'],
+	active: ['name', 'members', 'lastMessage', 'messages', 'status', 'archive'],
 	archived: ['name', 'archived'],
 };
 

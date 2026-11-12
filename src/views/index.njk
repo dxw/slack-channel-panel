@@ -86,7 +86,7 @@
                         {% endif %}
                         {% if not archivedTab %}
                             {{ sortHeader('Status', sortLinks.status, 'w-28 px-2 py-3 sm:px-4') }}
-                            <th scope="col" class="w-28 px-2 py-3 sm:px-4"><span class="sr-only">Actions</span></th>
+                            {{ sortHeader('Archive', sortLinks.archive, 'w-28 px-2 py-3 sm:px-4') }}
                         {% endif %}
                     </tr>
                 </thead>
