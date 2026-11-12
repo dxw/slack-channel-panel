@@ -83,6 +83,12 @@ export const refreshChannels = async ({
 			(channel) =>
 				!channel.isArchived && (channel.isMember || canJoin(channel)),
 		);
+		const checkedIds = new Set(toCheck.map((channel) => channel.id));
+		for (const id of state.activity.keys()) {
+			if (!checkedIds.has(id)) {
+				state.activity.delete(id);
+			}
+		}
 		state.progress = {done: 0, total: toCheck.length};
 		console.log(
 			`Checking activity in ${toCheck.length} channels` +
