@@ -44,6 +44,7 @@
                 <div class="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">{{ notice.text }}</div>
             {% endif %}
         {% endif %}
+        <div id="refresh-banner">
         {% if refreshing %}
             <div class="mb-4 flex items-center gap-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800" role="status">
                 <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" class="size-5 shrink-0 animate-spin motion-reduce:animate-none">
@@ -53,6 +54,7 @@
                 <span>Data is refreshing. Please check back in a few minutes.</span>
             </div>
         {% endif %}
+        </div>
 
         <div class="flex flex-wrap items-end justify-between gap-2 border-b border-gray-200">
             {# Has an ID so search.js can update the counts as you search. #}
@@ -70,9 +72,12 @@
                     </a>
                 {% endfor %}
             </nav>
-            {% if refreshedAt %}
-                <p class="pb-3 text-sm text-gray-500">Last updated {{ refreshedAt.toLocaleString('en-GB', {dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/London'}) }}</p>
-            {% endif %}
+            {# Always on the page, even when empty, so search.js can update it. #}
+            <p id="last-updated" class="pb-3 text-sm text-gray-500">
+                {%- if refreshedAt -%}
+                    Last updated {{ refreshedAt.toLocaleString('en-GB', {dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/London'}) }}
+                {%- endif -%}
+            </p>
         </div>
 
         {# Searches channel names. Works by pressing Enter; with JavaScript

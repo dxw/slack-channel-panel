@@ -4,8 +4,15 @@
 
 const DEBOUNCE_MS = 300;
 
-// The parts of the page that change with the search, by ID.
-const UPDATED_IDS = ['channel-tabs', 'channel-results'];
+// The parts of the page that change with the search, by ID. Includes the
+// refresh banner and time, as a background refresh may have finished since
+// the page loaded.
+const UPDATED_IDS = [
+	'refresh-banner',
+	'last-updated',
+	'channel-tabs',
+	'channel-results',
+];
 
 const form = document.querySelector('[data-channel-search]');
 

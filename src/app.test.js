@@ -392,6 +392,13 @@ describe('archiving a channel', () => {
 		await refreshChannels({token: 'xoxb-test', pauseMs: 0});
 	});
 
+	it('has the refresh banner and time on the page when not refreshing, for search.js to update', async () => {
+		const html = await (await get('/', cookie)).text();
+
+		assert.match(html, /<div id="refresh-banner">\s*<\/div>/);
+		assert.match(html, /<p id="last-updated"[^>]*>Last updated /);
+	});
+
 	it('offers to archive inactive channels and ones with fewer than 2 members', async () => {
 		const html = await (await get('/', cookie)).text();
 
