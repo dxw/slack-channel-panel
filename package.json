@@ -6,7 +6,7 @@
 	"main": "index.js",
 	"scripts": {
 		"start": "node --env-file-if-exists=.env src/server.js",
-		"dev": "npm run watch:css & nodemon --env-file=.env src/server.js",
+		"dev": "npm run watch:css & nodemon --ignore .cache --env-file=.env src/server.js",
 		"build": "npm run build:css",
 		"build:css": "tailwindcss -i src/main.css -o src/public/styles.css --minify",
 		"watch:css": "tailwindcss -i src/main.css -o src/public/styles.css --watch=always",

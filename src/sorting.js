@@ -15,13 +15,16 @@
  * @param {any} channel
  */
 const statusRank = (channel) => {
-	if (channel.inactive) {
-		return 0;
+	if (channel.memberCount === 0) {
+		return 0; // Empty
 	}
-	if (channel.activity) {
+	if (channel.inactive) {
 		return 1;
 	}
-	return channel.isMember ? 3 : 2; // Not checked yet : Unknown (bot not in channel)
+	if (channel.activity) {
+		return 2;
+	}
+	return channel.isMember ? 4 : 3; // Not checked yet : Unknown (bot not in channel)
 };
 
 /** @type {Record<string, SortColumn>} */
@@ -40,6 +43,13 @@ export const SORT_COLUMNS = {
 		value: (channel) => channel.activity?.messagesLastMonth ?? null,
 		firstDirection: 'desc',
 	},
+	// Other organisations in Slack Connect channels, A–Z as shown. Channels not
+	// shared with anyone go last.
+	sharedWith: {
+		value: (channel) =>
+			channel.externalTeams?.length ? channel.externalTeams.join(', ') : null,
+		firstDirection: 'asc',
+	},
 	status: {value: statusRank, firstDirection: 'asc'},
 	// Channels that can be archived first.
 	archive: {
@@ -54,7 +64,15 @@ export const SORT_COLUMNS = {
 
 /** Which columns can be sorted on each tab. */
 export const SORTABLE_ON_TAB = {
-	active: ['name', 'members', 'lastMessage', 'messages', 'status', 'archive'],
+	active: [
+		'name',
+		'members',
+		'sharedWith',
+		'lastMessage',
+		'messages',
+		'status',
+		'archive',
+	],
 	archived: ['name', 'archived'],
 };
 

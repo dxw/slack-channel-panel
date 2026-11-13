@@ -8,6 +8,7 @@ import {
 	archiveChannel,
 	getChannelInfo,
 	fetchRecentMessages,
+	getTeamName,
 } from './api.js';
 
 const slackChannel = {
@@ -47,6 +48,7 @@ describe('toChannel', () => {
 			isMember: false,
 			isExternal: false,
 			hostTeamId: null,
+			sharedTeamIds: [],
 			memberCount: 42,
 			topic: 'Company-wide chat',
 			purpose: 'Announcements',
@@ -80,6 +82,17 @@ describe('toChannel', () => {
 		assert.equal(
 			toChannel({...slackChannel, conversation_host_id: 'T123'}).hostTeamId,
 			'T123',
+		);
+	});
+
+	it('keeps the IDs of the organisations in a Slack Connect channel', () => {
+		assert.deepEqual(
+			toChannel({
+				...slackChannel,
+				shared_team_ids: ['T_OURS', 'T_THEIRS'],
+				connected_team_ids: ['T_THEIRS', 'T_OTHER'],
+			}).sharedTeamIds,
+			['T_OURS', 'T_THEIRS', 'T_OTHER'],
 		);
 	});
 
@@ -236,5 +249,18 @@ describe('fetchRecentMessages', () => {
 		assert.equal(url.pathname, '/api/conversations.history');
 		assert.equal(url.searchParams.get('channel'), 'C123');
 		assert.equal(url.searchParams.get('limit'), '100');
+	});
+});
+
+describe('getTeamName', () => {
+	it('returns the name of the team', async () => {
+		const fetch = mock.method(globalThis, 'fetch', async () =>
+			Response.json({ok: true, team: {id: 'T_THEIRS', name: 'Partner Co'}}),
+		);
+
+		assert.equal(await getTeamName('xoxb-test', 'T_THEIRS'), 'Partner Co');
+		const [url] = fetch.mock.calls[0].arguments;
+		assert.equal(url.pathname, '/api/team.info');
+		assert.equal(url.searchParams.get('team'), 'T_THEIRS');
 	});
 });

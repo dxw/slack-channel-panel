@@ -8,14 +8,24 @@ import {
 	archiveChannel,
 	getChannelInfo,
 	fetchRecentMessages,
+	getTeamName,
 	toChannel,
 } from './api.js';
 import {summariseActivity, isInactive} from './activity.js';
-import {fakeChannels, fakeMessages, FAKE_TEAM_ID} from './fake-channels.js';
+import {
+	fakeChannels,
+	fakeMessages,
+	fakeTeamNames,
+	FAKE_TEAM_ID,
+} from './fake-channels.js';
+import {CACHE_FILE, saveCache, loadCache} from './cache.js';
 
 const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 // conversations.history allows about 50 calls a minute, so pause between channels.
 const PAUSE_BETWEEN_CHANNELS_MS = 1200;
+// Channels younger than this aren't offered for archiving, as they may not
+// have been used yet.
+const NEW_CHANNEL_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
 
 /** @typedef {import('./api.js').Channel} Channel */
 /** @typedef {import('./activity.js').Activity} Activity */
@@ -33,15 +43,41 @@ const emptyState = () => ({
 	error: null,
 	/** The ID of our own Slack team (organisation). @type {string | null} */
 	ownTeamId: null,
+	/** Names of other organisations in Slack Connect channels, by team ID. @type {Map<string, string>} */
+	teamNames: new Map(),
 	/** Whether the channels are made up, so archiving shouldn't call Slack. */
 	fake: false,
 });
 
 let state = emptyState();
 
+/** Where to save the data between restarts, in development. Null to not save it. @type {string | null} */
+let cacheFile = null;
+
+/** Saves the data to cacheFile, if set. */
+const saveToCache = () => {
+	if (!cacheFile) {
+		return;
+	}
+	try {
+		saveCache(cacheFile, {
+			channels: state.channels,
+			activity: state.activity,
+			teamNames: state.teamNames,
+			ownTeamId: state.ownTeamId,
+			refreshedAt: state.refreshedAt,
+		});
+	} catch (error) {
+		console.error(
+			`Couldn’t save channel data to ${cacheFile}: ${error.message}`,
+		);
+	}
+};
+
 /** Empties the store. Used by tests. */
 export const resetChannelData = () => {
 	state = emptyState();
+	cacheFile = null;
 };
 
 /**
@@ -61,17 +97,77 @@ const isOurs = (channel, ownTeamId) =>
 
 /**
  * Whether the dashboard offers to archive a channel: it's quiet (inactive, or
- * fewer than 2 members), the bot is in it (so we know its activity, and Slack
- * lets the bot archive it), and it's ours to archive.
+ * fewer than 2 members), at least a week old, the bot is in it (so we know its
+ * activity, and Slack lets the bot archive it), and it's ours to archive.
  * @param {Channel & {inactive: boolean}} channel
  * @param {string | null} ownTeamId
+ * @param {number} [now] Current time in ms.
  */
-export const isArchivable = (channel, ownTeamId) =>
+export const isArchivable = (channel, ownTeamId, now = Date.now()) =>
 	!channel.isArchived &&
 	!channel.isGeneral &&
+	now - channel.created.getTime() >= NEW_CHANNEL_MS &&
 	channel.isMember &&
 	isOurs(channel, ownTeamId) &&
 	(channel.inactive || channel.memberCount < 2);
+
+/**
+ * The IDs of the other organisations in a Slack Connect channel.
+ * @param {Channel} channel
+ * @param {string | null} ownTeamId
+ */
+const externalTeamIds = (channel, ownTeamId) =>
+	channel.sharedTeamIds.filter((id) => id !== ownTeamId);
+
+/**
+ * Fills in which organisations are in each Slack Connect channel.
+ * conversations.list leaves this out, so each channel's details are fetched.
+ * Archived channels are skipped, as the dashboard doesn't show this for them.
+ * @param {string} token
+ * @param {Channel[]} channels Updated in place.
+ * @param {number} pauseMs Pause between channels, to respect rate limits.
+ */
+const fetchSharedTeamIds = async (token, channels, pauseMs) => {
+	for (const channel of channels) {
+		if (!channel.isExternal || channel.isArchived) {
+			continue;
+		}
+		try {
+			channel.sharedTeamIds = (
+				await getChannelInfo(token, channel.id)
+			).sharedTeamIds;
+		} catch (error) {
+			// Keep going: the channel just won't show who it's shared with.
+			console.error(
+				`Couldn’t get who #${channel.name} is shared with: ${error.message}`,
+			);
+		}
+		await pause(pauseMs);
+	}
+};
+
+/**
+ * Looks up the names of other organisations in Slack Connect channels that we
+ * don't know yet. Organisations rarely rename, so names are kept between
+ * refreshes. If a lookup fails, the organisation's name is left out.
+ * @param {string} token
+ * @param {Channel[]} channels
+ * @param {string | null} ownTeamId
+ */
+const fetchTeamNames = async (token, channels, ownTeamId) => {
+	const unknown = new Set(
+		channels
+			.flatMap((channel) => externalTeamIds(channel, ownTeamId))
+			.filter((id) => !state.teamNames.has(id)),
+	);
+	for (const id of unknown) {
+		try {
+			state.teamNames.set(id, await getTeamName(token, id));
+		} catch (error) {
+			console.error(`Couldn’t get the name of team ${id}: ${error.message}`);
+		}
+	}
+};
 
 /**
  * Fetches all channels, then each active channel's recent messages. Results
@@ -104,6 +200,8 @@ export const refreshChannels = async ({
 		// Needed to tell which Slack Connect channels are ours to join or archive.
 		const ownTeamId = await getOwnTeamId(token);
 		state.ownTeamId = ownTeamId ?? null;
+		await fetchSharedTeamIds(token, channels, pauseMs);
+		await fetchTeamNames(token, channels, state.ownTeamId);
 
 		// Only check channels the bot is in, or can join. It joins Slack Connect
 		// channels only if they're hosted by our own organisation, never ones
@@ -145,6 +243,7 @@ export const refreshChannels = async ({
 
 		state.refreshedAt = new Date(now());
 		console.log('Finished checking channel activity');
+		saveToCache();
 	} catch (error) {
 		// Keep any channels from the last refresh.
 		state.error = error.message;
@@ -167,14 +266,21 @@ const loadFakeChannels = () => {
 	state.refreshedAt = new Date();
 	state.error = null;
 	state.ownTeamId = FAKE_TEAM_ID;
+	state.teamNames = new Map(Object.entries(fakeTeamNames));
 	state.fake = true;
 };
 
 /**
  * Starts refreshing channels now and every 6 hours.
  * Uses made-up channels if SLACK_FAKE_DATA=true (not in production).
+ *
+ * In development, the data is saved to a file after each refresh. On start,
+ * if that data is less than 6 hours old, it's used instead of refreshing now,
+ * and the next refresh is when it's 6 hours old.
+ * @param {object} [options]
+ * @param {string} [options.cache] Where to save the data in development.
  */
-export const startChannelRefresh = () => {
+export const startChannelRefresh = ({cache = CACHE_FILE} = {}) => {
 	if (
 		process.env.SLACK_FAKE_DATA === 'true' &&
 		process.env.NODE_ENV !== 'production'
@@ -193,8 +299,26 @@ export const startChannelRefresh = () => {
 		return;
 	}
 
-	refreshChannels({token});
-	setInterval(() => refreshChannels({token}), REFRESH_INTERVAL_MS);
+	const startRefreshing = () => {
+		refreshChannels({token});
+		setInterval(() => refreshChannels({token}), REFRESH_INTERVAL_MS);
+	};
+
+	if (process.env.NODE_ENV !== 'production') {
+		cacheFile = cache;
+		const cached = loadCache(cache);
+		const age = cached ? Date.now() - cached.refreshedAt.getTime() : Infinity;
+		if (cached && age < REFRESH_INTERVAL_MS) {
+			Object.assign(state, cached);
+			console.log(
+				`Using channel data saved at ${cached.refreshedAt.toLocaleString('en-GB')}. Delete ${cache} to refresh from Slack now.`,
+			);
+			setTimeout(startRefreshing, REFRESH_INTERVAL_MS - age);
+			return;
+		}
+	}
+
+	startRefreshing();
 };
 
 /**
@@ -214,7 +338,7 @@ export const slackChannelUrl = (channelId, teamId) => {
 
 /**
  * A stored channel with its activity, whether it's inactive or archivable,
- * and a link to it in Slack.
+ * the names of other organisations in it, and a link to it in Slack.
  * @param {Channel} channel
  * @param {number} now Current time in ms.
  */
@@ -227,7 +351,10 @@ const withActivity = (channel, now) => {
 	};
 	return {
 		...withInactive,
-		canArchive: isArchivable(withInactive, state.ownTeamId),
+		canArchive: isArchivable(withInactive, state.ownTeamId, now),
+		externalTeams: externalTeamIds(channel, state.ownTeamId)
+			.map((id) => state.teamNames.get(id))
+			.filter(Boolean),
 		slackUrl: slackChannelUrl(channel.id, state.ownTeamId),
 	};
 };
@@ -296,6 +423,7 @@ const checkStillArchivable = async (token, id, now) => {
 			inactive: !fresh.isArchived && isInactive(activity, now),
 		},
 		state.ownTeamId,
+		now,
 	);
 };
 
@@ -333,5 +461,6 @@ export const archiveChannelById = async ({id, token, now = Date.now()}) => {
 	stored.archivedAt = new Date(now);
 	state.activity.delete(id);
 	console.log(`Archived #${stored.name}`);
+	saveToCache();
 	return stored;
 };

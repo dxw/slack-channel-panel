@@ -23,6 +23,15 @@
         </th>
     {% endmacro %}
 
+    {# Why the dashboard offers to archive a channel. #}
+    {% macro archiveReason(channel) -%}
+        {%- if channel.inactive -%}
+            Nobody has posted in this channel in the last 30 days.
+        {%- else -%}
+            This channel has fewer than 2 members.
+        {%- endif -%}
+    {%- endmacro %}
+
     {% if error %}
         <div class="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
             {{ error }}
@@ -35,17 +44,24 @@
                 <div class="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">{{ notice.text }}</div>
             {% endif %}
         {% endif %}
+        <div id="refresh-banner">
         {% if refreshing %}
-            <div class="mb-4 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800" role="status">
-                Checking channel activity… {{ progress.done }} of {{ progress.total }}
+            <div class="mb-4 flex items-center gap-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800" role="status">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" class="size-5 shrink-0 animate-spin motion-reduce:animate-none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" class="opacity-25"/>
+                    <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                </svg>
+                <span>Data is refreshing. Please check back in a few minutes.</span>
             </div>
         {% endif %}
+        </div>
 
         <div class="flex flex-wrap items-end justify-between gap-2 border-b border-gray-200">
-            <nav aria-label="Channel status" class="-mb-px flex gap-4">
+            {# Has an ID so search.js can update the counts as you search. #}
+            <nav id="channel-tabs" aria-label="Channel status" class="-mb-px flex gap-4">
                 {% for tab in [
-                    {status: 'active', label: 'Active', href: '/'},
-                    {status: 'archived', label: 'Archived', href: '/?status=archived'}
+                    {status: 'active', label: 'Active', href: tabUrls.active},
+                    {status: 'archived', label: 'Archived', href: tabUrls.archived}
                 ] %}
                     {% set current = tab.status == status %}
                     <a href="{{ tab.href }}"
@@ -56,11 +72,46 @@
                     </a>
                 {% endfor %}
             </nav>
-            {% if refreshedAt %}
-                <p class="pb-3 text-sm text-gray-500">Last updated {{ refreshedAt.toLocaleString('en-GB', {dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/London'}) }}</p>
-            {% endif %}
+            {# Always on the page, even when empty, so search.js can update it. #}
+            <p id="last-updated" class="pb-3 text-sm text-gray-500">
+                {%- if refreshedAt -%}
+                    Last updated {{ refreshedAt.toLocaleString('en-GB', {dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/London'}) }}
+                {%- endif -%}
+            </p>
         </div>
 
+        {# Searches channel names. Works by pressing Enter; with JavaScript
+           (search.js), the results also update as you type. Keeps the tab and
+           sort, and goes back to page 1. #}
+        <form method="get" action="/" role="search" class="mt-4" data-channel-search>
+            {% if status == 'archived' %}
+                <input type="hidden" name="status" value="archived">
+            {% endif %}
+            {% if sort != 'name' or dir != 'asc' %}
+                <input type="hidden" name="sort" value="{{ sort }}">
+                <input type="hidden" name="dir" value="{{ dir }}">
+            {% endif %}
+            <label for="channel-search" class="sr-only">Search channel names</label>
+            <div class="relative w-full sm:max-w-sm">
+                <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                    class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-gray-400">
+                    <circle cx="8.5" cy="8.5" r="5.5"/>
+                    <path d="m13 13 4 4"/>
+                </svg>
+                <input id="channel-search" type="search" name="q" value="{{ q }}"
+                    placeholder="Search channels" autocomplete="off" spellcheck="false"
+                    class="w-full rounded-md border border-gray-300 bg-white py-2 pr-3 pl-9 text-sm placeholder:text-gray-400 focus:border-gray-900 focus:outline-2 focus:outline-offset-0 focus:outline-gray-900">
+            </div>
+        </form>
+        {# Tells screen reader users how many channels match, after search.js
+           updates the results. Outside the results, so it stays on the page. #}
+        <p id="search-status" class="sr-only" aria-live="polite"></p>
+
+        {# Everything search.js replaces when the results change. #}
+        <div id="channel-results">
+        {% if q %}
+            <p id="search-summary" class="sr-only">{{ pagination.total }} {{ 'channel' if pagination.total == 1 else 'channels' }} found</p>
+        {% endif %}
         <div class="mt-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
             {# Fixed column widths (set on the header cells), so the columns stay
                the same size whatever is on the page. Description takes the space
@@ -76,7 +127,10 @@
                         {% if not archivedTab %}
                             {{ sortHeader('Members', sortLinks.members, 'hidden w-24 px-2 py-3 text-right sm:px-4 md:table-cell') }}
                         {% endif %}
-                        <th scope="col" class="hidden px-2 py-3 sm:table-cell sm:px-4">Description</th>
+                        <th scope="col" class="hidden px-2 py-3 sm:px-4 lg:table-cell">Description</th>
+                        {% if not archivedTab %}
+                            {{ sortHeader('Shared with', sortLinks.sharedWith, 'hidden w-36 px-2 py-3 sm:px-4 xl:table-cell') }}
+                        {% endif %}
                         {% if archivedTab %}
                             {{ sortHeader('Archived', sortLinks.archived, 'w-28 px-2 py-3 sm:px-4') }}
                         {% else %}
@@ -86,7 +140,7 @@
                         {% endif %}
                         {% if not archivedTab %}
                             {{ sortHeader('Status', sortLinks.status, 'w-28 px-2 py-3 sm:px-4') }}
-                            {{ sortHeader('Archive', sortLinks.archive, 'w-28 px-2 py-3 sm:px-4') }}
+                            {{ sortHeader('Archive recommended', sortLinks.archive, 'w-28 px-2 py-3 sm:w-36 sm:px-4') }}
                         {% endif %}
                     </tr>
                 </thead>
@@ -108,10 +162,18 @@
                             {% if not archivedTab %}
                                 <td class="hidden px-2 py-3 text-right tabular-nums sm:px-4 md:table-cell">{{ channel.memberCount }}</td>
                             {% endif %}
-                            <td class="hidden px-2 py-3 text-gray-600 sm:table-cell sm:px-4">
+                            <td class="hidden px-2 py-3 text-gray-600 sm:px-4 lg:table-cell">
                                 {# Wraps onto at most 2 lines, then "…"; hover to see it all. #}
                                 <div class="line-clamp-2 break-words" title="{{ channel.purpose }}">{{ channel.purpose }}</div>
                             </td>
+                            {% if not archivedTab %}
+                                {# Other organisations in a Slack Connect channel. #}
+                                <td class="hidden px-2 py-3 text-gray-600 sm:px-4 xl:table-cell">
+                                    {% if channel.externalTeams | length %}
+                                        <div class="line-clamp-2 break-words" title="{{ channel.externalTeams | join(', ') }}">{{ channel.externalTeams | join(', ') }}</div>
+                                    {% endif %}
+                                </td>
+                            {% endif %}
                             {% if archivedTab %}
                                 <td class="px-2 py-3 whitespace-nowrap text-gray-600 sm:px-4">
                                     {% if channel.archivedAt %}
@@ -142,7 +204,11 @@
                             {% endif %}
                             {% if not archivedTab %}
                             <td class="px-2 py-3 whitespace-nowrap sm:px-4">
-                                {% if channel.inactive %}
+                                {# Nobody in it (not counting the bot): shown over every other status. #}
+                                {% if channel.memberCount == 0 %}
+                                    <span class="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-800"
+                                        title="This channel has no members">Empty</span>
+                                {% elif channel.inactive %}
                                     <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Inactive</span>
                                 {% elif channel.activity %}
                                     <span class="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800">Active</span>
@@ -155,17 +221,23 @@
                                 {% endif %}
                             </td>
                             <td class="px-2 py-3 text-right sm:px-4">
-                                {# Only for quiet channels that are ours to archive. Goes to a confirmation page first. #}
+                                {# Only for quiet channels that are ours to archive. Asks to
+                                   confirm first, in a modal (archive-dialog.js). #}
                                 {% if channel.canArchive %}
-                                    <a href="/channels/{{ channel.id }}/archive"
-                                        class="inline-block rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900">Archive<span class="sr-only"> #{{ channel.name }}</span></a>
+                                    <button type="button"
+                                        data-archive-url="/channels/{{ channel.id }}/archive"
+                                        data-archive-name="{{ channel.name }}"
+                                        data-archive-reason="{{ archiveReason(channel) }}"
+                                        class="inline-block cursor-pointer rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900">Archive<span class="sr-only"> #{{ channel.name }}</span></button>
                                 {% endif %}
                             </td>
                             {% endif %}
                         </tr>
                     {% else %}
                         <tr>
-                            <td colspan="{{ 3 if archivedTab else 7 }}" class="px-4 py-6 text-center text-gray-500">No {{ status }} channels.</td>
+                            <td colspan="{{ 3 if archivedTab else 8 }}" class="px-4 py-6 text-center text-gray-500">
+                                {% if q %}No {{ status }} channels match “{{ q }}”.{% else %}No {{ status }} channels.{% endif %}
+                            </td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -194,6 +266,37 @@
                 </div>
             </nav>
         {% endif %}
+        </div>
+
+        {# Asks to confirm archiving a channel. archive-dialog.js fills in the
+           channel and opens it when an Archive button is clicked. Outside the
+           results, as search.js replaces those. #}
+        <dialog id="archive-dialog" aria-labelledby="archive-dialog-title"
+            class="m-auto w-[calc(100%-2rem)] max-w-lg rounded-lg border border-gray-200 bg-white p-6 text-gray-900 shadow-lg backdrop:bg-gray-900/50">
+            <h2 id="archive-dialog-title" class="text-lg font-semibold">Archive #<span data-archive-name></span>?</h2>
+            <p class="mt-2 text-sm text-gray-600" data-archive-reason></p>
+            <p class="mt-2 text-sm text-gray-600">
+                Archiving removes it from people's channel list and stops new messages. Its history stays searchable, and it can be unarchived in Slack.
+            </p>
+            <div class="mt-6 flex items-center gap-3">
+                <form method="post" data-archive-form>
+                    <button class="cursor-pointer rounded-md bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900">
+                        Archive channel
+                    </button>
+                </form>
+                {# Closes the dialog without sending anything. Gets focus when it opens, so Enter doesn't archive by mistake. #}
+                <form method="dialog">
+                    <button autofocus class="cursor-pointer rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-100 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900">
+                        Cancel
+                    </button>
+                </form>
+            </div>
+        </dialog>
     {% endif %}
 
+{% endblock %}
+
+{% block scripts %}
+    <script src="/search.js"></script>
+    <script src="/archive-dialog.js"></script>
 {% endblock %}

@@ -31,6 +31,12 @@ const names = [
 /** The made-up ID of our own Slack team (organisation). */
 export const FAKE_TEAM_ID = 'TFAKE';
 
+/** Made-up names of other organisations, by team ID, as team.info returns them. */
+export const fakeTeamNames = {
+	TOTHER: 'Borealis Partners',
+	TPARTNER: 'Example Agency',
+};
+
 export const fakeChannels = names.map((name, i) => ({
 	id: `CFAKE${String(i).padStart(4, '0')}`,
 	name,
@@ -41,6 +47,12 @@ export const fakeChannels = names.map((name, i) => ({
 	// organisation, and #design is hosted by us.
 	is_ext_shared: name === 'project-borealis' || name === 'design',
 	conversation_host_id: name === 'project-borealis' ? 'TOTHER' : FAKE_TEAM_ID,
+	shared_team_ids:
+		name === 'project-borealis'
+			? ['TOTHER', FAKE_TEAM_ID]
+			: name === 'design'
+				? [FAKE_TEAM_ID, 'TOTHER', 'TPARTNER']
+				: undefined,
 	// #pets is small but busy, and #project-borealis small but not ours, so
 	// neither can be archived; #general can never be archived.
 	num_members:

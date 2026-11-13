@@ -1,5 +1,10 @@
 import {describe, it, beforeEach, afterEach, mock} from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {saveCache, loadCache} from './cache.js';
+import {toChannel} from './api.js';
 import {
 	refreshChannels,
 	getChannelData,
@@ -145,10 +150,57 @@ describe('refreshChannels', () => {
 		assert.deepEqual(calls(fetch), [
 			'conversations.list',
 			'auth.test',
+			// Slack Connect channels' details, for who they're shared with.
+			'conversations.info C4',
+			'conversations.info C5',
+			'conversations.info C6',
+			'conversations.info C7',
 			'conversations.join C4',
 			'conversations.history C4',
 			'conversations.history C7',
 		]);
+	});
+
+	it('gets the names of other organisations in Slack Connect channels', async () => {
+		const fetch = fakeSlack({
+			'conversations.list': () => ({
+				// conversations.list doesn't say who channels are shared with.
+				channels: [
+					slackChannel('C4', 'shared', {is_ext_shared: true}),
+					slackChannel('C5', 'also-shared', {is_ext_shared: true}),
+				],
+				response_metadata: {},
+			}),
+			'conversations.info': (params) => ({
+				channel: slackChannel(params.get('channel'), 'any', {
+					is_ext_shared: true,
+					shared_team_ids: ['T_THEIRS'],
+					connected_team_ids:
+						params.get('channel') === 'C4'
+							? ['T_THEIRS', 'T_OURS']
+							: ['T_THEIRS', 'T_OURS', 'T_BROKEN'],
+				}),
+			}),
+			'team.info': (params) => {
+				if (params.get('team') === 'T_BROKEN') {
+					return {ok: false, error: 'team_not_found'};
+				}
+				return {team: {name: 'Partner Co'}};
+			},
+			'conversations.history': () => ({messages: []}),
+		});
+
+		await refresh();
+		const [shared, alsoShared] = getChannelData(now).channels;
+
+		// Each organisation is looked up once, and never our own.
+		assert.deepEqual(
+			calls(fetch).filter((call) => call.startsWith('team.info')),
+			['team.info', 'team.info'],
+		);
+		assert.deepEqual(shared.externalTeams, ['Partner Co']);
+		// An organisation whose name can't be found is left out.
+		assert.deepEqual(alsoShared.externalTeams, ['Partner Co']);
 	});
 
 	it('does not join channels when joining is turned off', async () => {
@@ -240,6 +292,7 @@ describe('isArchivable', () => {
 		hostTeamId: 'T_OURS',
 		memberCount: 5,
 		inactive: true,
+		created: new Date('2020-01-01T00:00:00Z'),
 	};
 
 	it('is true for an inactive channel', () => {
@@ -283,6 +336,16 @@ describe('isArchivable', () => {
 
 	it('is false for a Slack Connect channel when our team is not known', () => {
 		assert.ok(!isArchivable({...quietChannel, isExternal: true}, null));
+	});
+
+	it('is false for a channel less than a week old', () => {
+		const now = new Date('2026-11-13T12:00:00Z').getTime();
+		const sixDaysAgo = new Date('2026-11-07T12:00:00Z');
+		const weekAgo = new Date('2026-11-06T12:00:00Z');
+		assert.ok(
+			!isArchivable({...quietChannel, created: sixDaysAgo}, 'T_OURS', now),
+		);
+		assert.ok(isArchivable({...quietChannel, created: weekAgo}, 'T_OURS', now));
 	});
 
 	it('is false for #general and archived channels', () => {
@@ -404,8 +467,73 @@ describe('archiveChannelById', () => {
 });
 
 describe('startChannelRefresh', () => {
+	let dir;
+	let cache;
+
+	beforeEach(() => {
+		dir = fs.mkdtempSync(path.join(os.tmpdir(), 'channel-cache-'));
+		cache = path.join(dir, 'channels.json');
+		// So the 6-hourly refresh timers don't keep the tests running.
+		mock.timers.enable({apis: ['setTimeout', 'setInterval']});
+	});
+
 	afterEach(() => {
 		delete process.env.SLACK_FAKE_DATA;
+		delete process.env.SLACK_BOT_TOKEN;
+		mock.timers.reset();
+		fs.rmSync(dir, {recursive: true, force: true});
+	});
+
+	/** Saves channel data refreshed some hours ago to the cache file. */
+	const saveDataFrom = (hoursAgo) =>
+		saveCache(cache, {
+			channels: [toChannel(slackChannel('C9', 'cached', {num_members: 2}))],
+			activity: new Map(),
+			teamNames: new Map(),
+			ownTeamId: 'T_OURS',
+			refreshedAt: new Date(Date.now() - hoursAgo * 60 * 60 * 1000),
+		});
+
+	it('uses data saved less than 6 hours ago without calling Slack', () => {
+		process.env.SLACK_BOT_TOKEN = 'xoxb-test';
+		saveDataFrom(1);
+		const fetch = fakeSlack();
+
+		startChannelRefresh({cache});
+
+		assert.deepEqual(
+			getChannelData().channels.map((channel) => channel.name),
+			['cached'],
+		);
+		assert.equal(fetch.mock.callCount(), 0);
+	});
+
+	it('refreshes from Slack when the saved data is 6 hours old', async () => {
+		process.env.SLACK_BOT_TOKEN = 'xoxb-test';
+		saveDataFrom(6);
+		const fetch = fakeSlack();
+
+		startChannelRefresh({cache});
+		await new Promise(setImmediate);
+
+		assert.equal(calls(fetch)[0], 'conversations.list');
+	});
+
+	it('saves the data after archiving a channel', async () => {
+		process.env.SLACK_BOT_TOKEN = 'xoxb-test';
+		saveDataFrom(1);
+		startChannelRefresh({cache});
+		// #cached has 1 member, so it can be archived.
+		const lonely = slackChannel('C9', 'cached', {num_members: 2});
+		fakeSlack({
+			'conversations.info': () => ({channel: lonely}),
+			'conversations.history': () => ({messages: messages.C1}),
+			'conversations.archive': () => ({}),
+		});
+
+		await archiveChannelById({id: 'C9', token: 'xoxb-test'});
+
+		assert.equal(loadCache(cache).channels[0].isArchived, true);
 	});
 
 	it('uses made-up channels without calling Slack when SLACK_FAKE_DATA=true', () => {

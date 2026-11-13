@@ -67,6 +67,12 @@ const slackResponses = {
 			{type: 'message', user: 'U1', ts: String(nowSeconds - DAY_SECONDS)},
 		],
 	},
+	// Active, but archivable as it has only 1 member.
+	'conversations.history CZ0': {
+		messages: [
+			{type: 'message', user: 'U1', ts: String(nowSeconds - DAY_SECONDS)},
+		],
+	},
 	// Checked again with Slack just before archiving.
 	'conversations.info C789': {
 		channel: {
@@ -289,6 +295,44 @@ describe('sorting', () => {
 	});
 });
 
+describe('searching', () => {
+	let cookie;
+
+	before(async () => {
+		({cookie} = await login('test@dxw.com'));
+	});
+
+	it('shows only channels whose names match, ignoring case and a leading #', async () => {
+		const html = await (await get('/?q=%23QUIET', cookie)).text();
+
+		assert.ok(html.includes('#quiet-channel'));
+		assert.ok(!html.includes('#test-channel'));
+		assert.ok(html.includes('Showing 1–1 of 1 channels'));
+		assert.ok(html.includes('value="#QUIET"'));
+	});
+
+	it('counts matching channels on each tab, and keeps the search when switching', async () => {
+		const html = await (await get('/?q=channel', cookie)).text();
+
+		// 32 active channels and 1 archived one have "channel" in their name.
+		assert.ok(html.includes('href="/?status=archived&amp;q=channel"'));
+		assert.match(html, /Archived\s*<span[^>]*>1<\/span>/);
+	});
+
+	it('keeps the search when sorting and changing page', async () => {
+		const html = await (await get('/?q=zz', cookie)).text();
+
+		assert.ok(html.includes('href="/?q=zz&amp;page=2"'));
+		assert.ok(html.includes('href="/?q=zz&amp;sort=members&amp;dir=desc"'));
+	});
+
+	it('says when nothing matches', async () => {
+		const html = await (await get('/?q=nothing-like-this', cookie)).text();
+
+		assert.ok(html.includes('No active channels match “nothing-like-this”.'));
+	});
+});
+
 describe('when Slack fails', () => {
 	let cookie;
 
@@ -348,6 +392,13 @@ describe('archiving a channel', () => {
 		await refreshChannels({token: 'xoxb-test', pauseMs: 0});
 	});
 
+	it('has the refresh banner and time on the page when not refreshing, for search.js to update', async () => {
+		const html = await (await get('/', cookie)).text();
+
+		assert.match(html, /<div id="refresh-banner">\s*<\/div>/);
+		assert.match(html, /<p id="last-updated"[^>]*>Last updated /);
+	});
+
 	it('offers to archive inactive channels and ones with fewer than 2 members', async () => {
 		const html = await (await get('/', cookie)).text();
 
@@ -356,26 +407,33 @@ describe('archiving a channel', () => {
 		assert.ok(!rowFor(html, 'test-channel').includes('Archive'));
 	});
 
-	it('asks to confirm first', async () => {
-		const res = await get('/channels/C789/archive', cookie);
-		const html = await res.text();
+	it('gives the modal what it needs to ask to confirm', async () => {
+		const html = await (await get('/', cookie)).text();
 
-		assert.equal(res.status, 200);
-		assert.ok(html.includes('Archive #quiet-channel?'));
-		assert.ok(html.includes('action="/channels/C789/archive"'));
-	});
-
-	it('does not offer to archive an active channel', async () => {
-		const res = await get('/channels/C123/archive', cookie);
-
-		assert.equal(res.status, 404);
+		assert.ok(html.includes('<dialog id="archive-dialog"'));
+		assert.ok(
+			rowFor(html, 'quiet-channel').includes(
+				'data-archive-reason="Nobody has posted in this channel in the last 30 days."',
+			),
+		);
+		assert.ok(
+			rowFor(html, 'zz-channel-00').includes(
+				'data-archive-reason="This channel has fewer than 2 members."',
+			),
+		);
 	});
 
 	it('refuses to archive an active channel', async () => {
 		const res = await post('/channels/C123/archive', {cookie});
 
-		assert.equal(res.status, 404);
+		assert.equal(res.status, 302);
+		assert.equal(res.headers.get('location'), '/');
 		assert.ok(!archivedIds.includes('C123'));
+
+		const html = await (await get('/', cookie)).text();
+		assert.ok(
+			html.includes('That channel can’t be archived from the dashboard.'),
+		);
 	});
 
 	it('archives the channel and moves it to the Archived tab', async () => {
