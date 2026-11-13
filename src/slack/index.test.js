@@ -145,10 +145,57 @@ describe('refreshChannels', () => {
 		assert.deepEqual(calls(fetch), [
 			'conversations.list',
 			'auth.test',
+			// Slack Connect channels' details, for who they're shared with.
+			'conversations.info C4',
+			'conversations.info C5',
+			'conversations.info C6',
+			'conversations.info C7',
 			'conversations.join C4',
 			'conversations.history C4',
 			'conversations.history C7',
 		]);
+	});
+
+	it('gets the names of other organisations in Slack Connect channels', async () => {
+		const fetch = fakeSlack({
+			'conversations.list': () => ({
+				// conversations.list doesn't say who channels are shared with.
+				channels: [
+					slackChannel('C4', 'shared', {is_ext_shared: true}),
+					slackChannel('C5', 'also-shared', {is_ext_shared: true}),
+				],
+				response_metadata: {},
+			}),
+			'conversations.info': (params) => ({
+				channel: slackChannel(params.get('channel'), 'any', {
+					is_ext_shared: true,
+					shared_team_ids: ['T_THEIRS'],
+					connected_team_ids:
+						params.get('channel') === 'C4'
+							? ['T_THEIRS', 'T_OURS']
+							: ['T_THEIRS', 'T_OURS', 'T_BROKEN'],
+				}),
+			}),
+			'team.info': (params) => {
+				if (params.get('team') === 'T_BROKEN') {
+					return {ok: false, error: 'team_not_found'};
+				}
+				return {team: {name: 'Partner Co'}};
+			},
+			'conversations.history': () => ({messages: []}),
+		});
+
+		await refresh();
+		const [shared, alsoShared] = getChannelData(now).channels;
+
+		// Each organisation is looked up once, and never our own.
+		assert.deepEqual(
+			calls(fetch).filter((call) => call.startsWith('team.info')),
+			['team.info', 'team.info'],
+		);
+		assert.deepEqual(shared.externalTeams, ['Partner Co']);
+		// An organisation whose name can't be found is left out.
+		assert.deepEqual(alsoShared.externalTeams, ['Partner Co']);
 	});
 
 	it('does not join channels when joining is turned off', async () => {

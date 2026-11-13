@@ -16,6 +16,9 @@ const MAX_RETRIES = 3; // number of retries after being rate limited by Slack
  * @property {string | null} hostTeamId The ID of the Slack team (organisation)
  *   that owns the channel. For Slack Connect channels this may be another
  *   organisation's.
+ * @property {string[]} sharedTeamIds For Slack Connect channels, the IDs of
+ *   every Slack team (organisation) in the channel, which may include ours.
+ *   Empty for other channels.
  * @property {number} memberCount Members, not counting the Slack bot.
  * @property {string} topic
  * @property {string} purpose
@@ -39,6 +42,12 @@ export const toChannel = (channel) => {
 		isMember,
 		isExternal: Boolean(channel.is_ext_shared || channel.is_pending_ext_shared),
 		hostTeamId: channel.conversation_host_id ?? null,
+		sharedTeamIds: [
+			...new Set([
+				...(channel.shared_team_ids ?? []),
+				...(channel.connected_team_ids ?? []),
+			]),
+		],
 		memberCount: Math.max((channel.num_members ?? 0) - (isMember ? 1 : 0), 0),
 		topic: channel.topic?.value ?? '',
 		purpose: channel.purpose?.value ?? '',
@@ -141,6 +150,19 @@ export const listChannels = async (token) => {
 export const getOwnTeamId = async (token) => {
 	const body = await callSlack('auth.test', {}, token);
 	return body.team_id;
+};
+
+/**
+ * Returns the name of a Slack team (organisation), including other
+ * organisations we share Slack Connect channels with.
+ * Needs team:read.
+ * @param {string} token
+ * @param {string} teamId
+ * @returns {Promise<string>}
+ */
+export const getTeamName = async (token, teamId) => {
+	const body = await callSlack('team.info', {team: teamId}, token);
+	return body.team.name;
 };
 
 /**

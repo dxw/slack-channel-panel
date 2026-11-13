@@ -8,10 +8,16 @@ import {
 	archiveChannel,
 	getChannelInfo,
 	fetchRecentMessages,
+	getTeamName,
 	toChannel,
 } from './api.js';
 import {summariseActivity, isInactive} from './activity.js';
-import {fakeChannels, fakeMessages, FAKE_TEAM_ID} from './fake-channels.js';
+import {
+	fakeChannels,
+	fakeMessages,
+	fakeTeamNames,
+	FAKE_TEAM_ID,
+} from './fake-channels.js';
 
 const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 // conversations.history allows about 50 calls a minute, so pause between channels.
@@ -36,6 +42,8 @@ const emptyState = () => ({
 	error: null,
 	/** The ID of our own Slack team (organisation). @type {string | null} */
 	ownTeamId: null,
+	/** Names of other organisations in Slack Connect channels, by team ID. @type {Map<string, string>} */
+	teamNames: new Map(),
 	/** Whether the channels are made up, so archiving shouldn't call Slack. */
 	fake: false,
 });
@@ -79,6 +87,64 @@ export const isArchivable = (channel, ownTeamId, now = Date.now()) =>
 	(channel.inactive || channel.memberCount < 2);
 
 /**
+ * The IDs of the other organisations in a Slack Connect channel.
+ * @param {Channel} channel
+ * @param {string | null} ownTeamId
+ */
+const externalTeamIds = (channel, ownTeamId) =>
+	channel.sharedTeamIds.filter((id) => id !== ownTeamId);
+
+/**
+ * Fills in which organisations are in each Slack Connect channel.
+ * conversations.list leaves this out, so each channel's details are fetched.
+ * Archived channels are skipped, as the dashboard doesn't show this for them.
+ * @param {string} token
+ * @param {Channel[]} channels Updated in place.
+ * @param {number} pauseMs Pause between channels, to respect rate limits.
+ */
+const fetchSharedTeamIds = async (token, channels, pauseMs) => {
+	for (const channel of channels) {
+		if (!channel.isExternal || channel.isArchived) {
+			continue;
+		}
+		try {
+			channel.sharedTeamIds = (
+				await getChannelInfo(token, channel.id)
+			).sharedTeamIds;
+		} catch (error) {
+			// Keep going: the channel just won't show who it's shared with.
+			console.error(
+				`Couldn’t get who #${channel.name} is shared with: ${error.message}`,
+			);
+		}
+		await pause(pauseMs);
+	}
+};
+
+/**
+ * Looks up the names of other organisations in Slack Connect channels that we
+ * don't know yet. Organisations rarely rename, so names are kept between
+ * refreshes. If a lookup fails, the organisation's name is left out.
+ * @param {string} token
+ * @param {Channel[]} channels
+ * @param {string | null} ownTeamId
+ */
+const fetchTeamNames = async (token, channels, ownTeamId) => {
+	const unknown = new Set(
+		channels
+			.flatMap((channel) => externalTeamIds(channel, ownTeamId))
+			.filter((id) => !state.teamNames.has(id)),
+	);
+	for (const id of unknown) {
+		try {
+			state.teamNames.set(id, await getTeamName(token, id));
+		} catch (error) {
+			console.error(`Couldn’t get the name of team ${id}: ${error.message}`);
+		}
+	}
+};
+
+/**
  * Fetches all channels, then each active channel's recent messages. Results
  * are stored as they arrive, so the page fills in during the first refresh.
  *
@@ -109,6 +175,8 @@ export const refreshChannels = async ({
 		// Needed to tell which Slack Connect channels are ours to join or archive.
 		const ownTeamId = await getOwnTeamId(token);
 		state.ownTeamId = ownTeamId ?? null;
+		await fetchSharedTeamIds(token, channels, pauseMs);
+		await fetchTeamNames(token, channels, state.ownTeamId);
 
 		// Only check channels the bot is in, or can join. It joins Slack Connect
 		// channels only if they're hosted by our own organisation, never ones
@@ -172,6 +240,7 @@ const loadFakeChannels = () => {
 	state.refreshedAt = new Date();
 	state.error = null;
 	state.ownTeamId = FAKE_TEAM_ID;
+	state.teamNames = new Map(Object.entries(fakeTeamNames));
 	state.fake = true;
 };
 
@@ -219,7 +288,7 @@ export const slackChannelUrl = (channelId, teamId) => {
 
 /**
  * A stored channel with its activity, whether it's inactive or archivable,
- * and a link to it in Slack.
+ * the names of other organisations in it, and a link to it in Slack.
  * @param {Channel} channel
  * @param {number} now Current time in ms.
  */
@@ -233,6 +302,9 @@ const withActivity = (channel, now) => {
 	return {
 		...withInactive,
 		canArchive: isArchivable(withInactive, state.ownTeamId, now),
+		externalTeams: externalTeamIds(channel, state.ownTeamId)
+			.map((id) => state.teamNames.get(id))
+			.filter(Boolean),
 		slackUrl: slackChannelUrl(channel.id, state.ownTeamId),
 	};
 };

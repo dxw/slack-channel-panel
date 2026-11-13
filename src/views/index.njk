@@ -123,6 +123,9 @@
                             {{ sortHeader('Members', sortLinks.members, 'hidden w-24 px-2 py-3 text-right sm:px-4 md:table-cell') }}
                         {% endif %}
                         <th scope="col" class="hidden px-2 py-3 sm:table-cell sm:px-4">Description</th>
+                        {% if not archivedTab %}
+                            <th scope="col" class="hidden w-36 px-2 py-3 sm:px-4 xl:table-cell">Shared with</th>
+                        {% endif %}
                         {% if archivedTab %}
                             {{ sortHeader('Archived', sortLinks.archived, 'w-28 px-2 py-3 sm:px-4') }}
                         {% else %}
@@ -158,6 +161,14 @@
                                 {# Wraps onto at most 2 lines, then "…"; hover to see it all. #}
                                 <div class="line-clamp-2 break-words" title="{{ channel.purpose }}">{{ channel.purpose }}</div>
                             </td>
+                            {% if not archivedTab %}
+                                {# Other organisations in a Slack Connect channel. #}
+                                <td class="hidden px-2 py-3 text-gray-600 sm:px-4 xl:table-cell">
+                                    {% if channel.externalTeams | length %}
+                                        <div class="line-clamp-2 break-words" title="{{ channel.externalTeams | join(', ') }}">{{ channel.externalTeams | join(', ') }}</div>
+                                    {% endif %}
+                                </td>
+                            {% endif %}
                             {% if archivedTab %}
                                 <td class="px-2 py-3 whitespace-nowrap text-gray-600 sm:px-4">
                                     {% if channel.archivedAt %}
@@ -219,7 +230,7 @@
                         </tr>
                     {% else %}
                         <tr>
-                            <td colspan="{{ 3 if archivedTab else 7 }}" class="px-4 py-6 text-center text-gray-500">
+                            <td colspan="{{ 3 if archivedTab else 8 }}" class="px-4 py-6 text-center text-gray-500">
                                 {% if q %}No {{ status }} channels match “{{ q }}”.{% else %}No {{ status }} channels.{% endif %}
                             </td>
                         </tr>
