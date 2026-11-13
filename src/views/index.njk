@@ -127,7 +127,7 @@
                         {% if not archivedTab %}
                             {{ sortHeader('Members', sortLinks.members, 'hidden w-24 px-2 py-3 text-right sm:px-4 md:table-cell') }}
                         {% endif %}
-                        <th scope="col" class="hidden px-2 py-3 sm:table-cell sm:px-4">Description</th>
+                        <th scope="col" class="hidden px-2 py-3 sm:px-4 lg:table-cell">Description</th>
                         {% if not archivedTab %}
                             {{ sortHeader('Shared with', sortLinks.sharedWith, 'hidden w-36 px-2 py-3 sm:px-4 xl:table-cell') }}
                         {% endif %}
@@ -140,7 +140,7 @@
                         {% endif %}
                         {% if not archivedTab %}
                             {{ sortHeader('Status', sortLinks.status, 'w-28 px-2 py-3 sm:px-4') }}
-                            {{ sortHeader('Archive recommended', sortLinks.archive, 'w-36 px-2 py-3 sm:px-4') }}
+                            {{ sortHeader('Archive recommended', sortLinks.archive, 'w-28 px-2 py-3 sm:w-36 sm:px-4') }}
                         {% endif %}
                     </tr>
                 </thead>
@@ -162,7 +162,7 @@
                             {% if not archivedTab %}
                                 <td class="hidden px-2 py-3 text-right tabular-nums sm:px-4 md:table-cell">{{ channel.memberCount }}</td>
                             {% endif %}
-                            <td class="hidden px-2 py-3 text-gray-600 sm:table-cell sm:px-4">
+                            <td class="hidden px-2 py-3 text-gray-600 sm:px-4 lg:table-cell">
                                 {# Wraps onto at most 2 lines, then "…"; hover to see it all. #}
                                 <div class="line-clamp-2 break-words" title="{{ channel.purpose }}">{{ channel.purpose }}</div>
                             </td>
