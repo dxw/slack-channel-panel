@@ -124,7 +124,7 @@
                         {% endif %}
                         <th scope="col" class="hidden px-2 py-3 sm:table-cell sm:px-4">Description</th>
                         {% if not archivedTab %}
-                            <th scope="col" class="hidden w-36 px-2 py-3 sm:px-4 xl:table-cell">Shared with</th>
+                            {{ sortHeader('Shared with', sortLinks.sharedWith, 'hidden w-36 px-2 py-3 sm:px-4 xl:table-cell') }}
                         {% endif %}
                         {% if archivedTab %}
                             {{ sortHeader('Archived', sortLinks.archived, 'w-28 px-2 py-3 sm:px-4') }}

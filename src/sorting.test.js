@@ -124,6 +124,28 @@ describe('sortChannels', () => {
 		]);
 	});
 
+	it('sorts by who channels are shared with, with unshared channels last', () => {
+		const channels = [
+			channel('a'),
+			channel('b', {externalTeams: ['Zeta Ltd']}),
+			channel('c', {externalTeams: []}),
+			channel('d', {externalTeams: ['Alpha Co', 'Zeta Ltd']}),
+		];
+
+		assert.deepEqual(names(sortChannels(channels, 'sharedWith', 'asc')), [
+			'd',
+			'b',
+			'a',
+			'c',
+		]);
+		assert.deepEqual(names(sortChannels(channels, 'sharedWith', 'desc')), [
+			'b',
+			'd',
+			'a',
+			'c',
+		]);
+	});
+
 	it('sorts by name when values are equal', () => {
 		const channels = [
 			channel('b', {memberCount: 5}),
