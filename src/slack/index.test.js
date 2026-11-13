@@ -1,5 +1,10 @@
 import {describe, it, beforeEach, afterEach, mock} from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {saveCache, loadCache} from './cache.js';
+import {toChannel} from './api.js';
 import {
 	refreshChannels,
 	getChannelData,
@@ -462,8 +467,73 @@ describe('archiveChannelById', () => {
 });
 
 describe('startChannelRefresh', () => {
+	let dir;
+	let cache;
+
+	beforeEach(() => {
+		dir = fs.mkdtempSync(path.join(os.tmpdir(), 'channel-cache-'));
+		cache = path.join(dir, 'channels.json');
+		// So the 6-hourly refresh timers don't keep the tests running.
+		mock.timers.enable({apis: ['setTimeout', 'setInterval']});
+	});
+
 	afterEach(() => {
 		delete process.env.SLACK_FAKE_DATA;
+		delete process.env.SLACK_BOT_TOKEN;
+		mock.timers.reset();
+		fs.rmSync(dir, {recursive: true, force: true});
+	});
+
+	/** Saves channel data refreshed some hours ago to the cache file. */
+	const saveDataFrom = (hoursAgo) =>
+		saveCache(cache, {
+			channels: [toChannel(slackChannel('C9', 'cached', {num_members: 2}))],
+			activity: new Map(),
+			teamNames: new Map(),
+			ownTeamId: 'T_OURS',
+			refreshedAt: new Date(Date.now() - hoursAgo * 60 * 60 * 1000),
+		});
+
+	it('uses data saved less than 6 hours ago without calling Slack', () => {
+		process.env.SLACK_BOT_TOKEN = 'xoxb-test';
+		saveDataFrom(1);
+		const fetch = fakeSlack();
+
+		startChannelRefresh({cache});
+
+		assert.deepEqual(
+			getChannelData().channels.map((channel) => channel.name),
+			['cached'],
+		);
+		assert.equal(fetch.mock.callCount(), 0);
+	});
+
+	it('refreshes from Slack when the saved data is 6 hours old', async () => {
+		process.env.SLACK_BOT_TOKEN = 'xoxb-test';
+		saveDataFrom(6);
+		const fetch = fakeSlack();
+
+		startChannelRefresh({cache});
+		await new Promise(setImmediate);
+
+		assert.equal(calls(fetch)[0], 'conversations.list');
+	});
+
+	it('saves the data after archiving a channel', async () => {
+		process.env.SLACK_BOT_TOKEN = 'xoxb-test';
+		saveDataFrom(1);
+		startChannelRefresh({cache});
+		// #cached has 1 member, so it can be archived.
+		const lonely = slackChannel('C9', 'cached', {num_members: 2});
+		fakeSlack({
+			'conversations.info': () => ({channel: lonely}),
+			'conversations.history': () => ({messages: messages.C1}),
+			'conversations.archive': () => ({}),
+		});
+
+		await archiveChannelById({id: 'C9', token: 'xoxb-test'});
+
+		assert.equal(loadCache(cache).channels[0].isArchived, true);
 	});
 
 	it('uses made-up channels without calling Slack when SLACK_FAKE_DATA=true', () => {

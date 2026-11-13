@@ -18,6 +18,7 @@ import {
 	fakeTeamNames,
 	FAKE_TEAM_ID,
 } from './fake-channels.js';
+import {CACHE_FILE, saveCache, loadCache} from './cache.js';
 
 const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 // conversations.history allows about 50 calls a minute, so pause between channels.
@@ -50,9 +51,33 @@ const emptyState = () => ({
 
 let state = emptyState();
 
+/** Where to save the data between restarts, in development. Null to not save it. @type {string | null} */
+let cacheFile = null;
+
+/** Saves the data to cacheFile, if set. */
+const saveToCache = () => {
+	if (!cacheFile) {
+		return;
+	}
+	try {
+		saveCache(cacheFile, {
+			channels: state.channels,
+			activity: state.activity,
+			teamNames: state.teamNames,
+			ownTeamId: state.ownTeamId,
+			refreshedAt: state.refreshedAt,
+		});
+	} catch (error) {
+		console.error(
+			`Couldn’t save channel data to ${cacheFile}: ${error.message}`,
+		);
+	}
+};
+
 /** Empties the store. Used by tests. */
 export const resetChannelData = () => {
 	state = emptyState();
+	cacheFile = null;
 };
 
 /**
@@ -218,6 +243,7 @@ export const refreshChannels = async ({
 
 		state.refreshedAt = new Date(now());
 		console.log('Finished checking channel activity');
+		saveToCache();
 	} catch (error) {
 		// Keep any channels from the last refresh.
 		state.error = error.message;
@@ -247,8 +273,14 @@ const loadFakeChannels = () => {
 /**
  * Starts refreshing channels now and every 6 hours.
  * Uses made-up channels if SLACK_FAKE_DATA=true (not in production).
+ *
+ * In development, the data is saved to a file after each refresh. On start,
+ * if that data is less than 6 hours old, it's used instead of refreshing now,
+ * and the next refresh is when it's 6 hours old.
+ * @param {object} [options]
+ * @param {string} [options.cache] Where to save the data in development.
  */
-export const startChannelRefresh = () => {
+export const startChannelRefresh = ({cache = CACHE_FILE} = {}) => {
 	if (
 		process.env.SLACK_FAKE_DATA === 'true' &&
 		process.env.NODE_ENV !== 'production'
@@ -267,8 +299,26 @@ export const startChannelRefresh = () => {
 		return;
 	}
 
-	refreshChannels({token});
-	setInterval(() => refreshChannels({token}), REFRESH_INTERVAL_MS);
+	const startRefreshing = () => {
+		refreshChannels({token});
+		setInterval(() => refreshChannels({token}), REFRESH_INTERVAL_MS);
+	};
+
+	if (process.env.NODE_ENV !== 'production') {
+		cacheFile = cache;
+		const cached = loadCache(cache);
+		const age = cached ? Date.now() - cached.refreshedAt.getTime() : Infinity;
+		if (cached && age < REFRESH_INTERVAL_MS) {
+			Object.assign(state, cached);
+			console.log(
+				`Using channel data saved at ${cached.refreshedAt.toLocaleString('en-GB')}. Delete ${cache} to refresh from Slack now.`,
+			);
+			setTimeout(startRefreshing, REFRESH_INTERVAL_MS - age);
+			return;
+		}
+	}
+
+	startRefreshing();
 };
 
 /**
@@ -411,5 +461,6 @@ export const archiveChannelById = async ({id, token, now = Date.now()}) => {
 	stored.archivedAt = new Date(now);
 	state.activity.delete(id);
 	console.log(`Archived #${stored.name}`);
+	saveToCache();
 	return stored;
 };
