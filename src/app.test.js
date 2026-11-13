@@ -67,6 +67,12 @@ const slackResponses = {
 			{type: 'message', user: 'U1', ts: String(nowSeconds - DAY_SECONDS)},
 		],
 	},
+	// Active, but archivable as it has only 1 member.
+	'conversations.history CZ0': {
+		messages: [
+			{type: 'message', user: 'U1', ts: String(nowSeconds - DAY_SECONDS)},
+		],
+	},
 	// Checked again with Slack just before archiving.
 	'conversations.info C789': {
 		channel: {
@@ -410,26 +416,17 @@ describe('archiving a channel', () => {
 		);
 	});
 
-	it('asks to confirm first, without JavaScript', async () => {
-		const res = await get('/channels/C789/archive', cookie);
-		const html = await res.text();
-
-		assert.equal(res.status, 200);
-		assert.ok(html.includes('Archive #quiet-channel?'));
-		assert.ok(html.includes('action="/channels/C789/archive"'));
-	});
-
-	it('does not offer to archive an active channel', async () => {
-		const res = await get('/channels/C123/archive', cookie);
-
-		assert.equal(res.status, 404);
-	});
-
 	it('refuses to archive an active channel', async () => {
 		const res = await post('/channels/C123/archive', {cookie});
 
-		assert.equal(res.status, 404);
+		assert.equal(res.status, 302);
+		assert.equal(res.headers.get('location'), '/');
 		assert.ok(!archivedIds.includes('C123'));
+
+		const html = await (await get('/', cookie)).text();
+		assert.ok(
+			html.includes('That channel can’t be archived from the dashboard.'),
+		);
 	});
 
 	it('archives the channel and moves it to the Archived tab', async () => {

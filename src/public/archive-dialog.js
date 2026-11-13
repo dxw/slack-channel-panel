@@ -1,6 +1,5 @@
-// Asks to confirm archiving a channel in a modal, instead of going to the
-// confirmation page. Without this script, the Archive buttons still go to
-// that page.
+// Asks to confirm archiving a channel in a modal. The Archive buttons only
+// work with this script.
 
 const dialog = document.getElementById('archive-dialog');
 
@@ -10,26 +9,16 @@ if (dialog) {
 	// Listens on the whole page, as search.js replaces the table (and its
 	// Archive buttons) as you search.
 	document.addEventListener('click', (event) => {
-		const link = event.target.closest('a[data-archive-name]');
-		// Let new-tab clicks (Ctrl, Cmd, Shift, middle button) open the page.
-		if (
-			!link ||
-			event.button !== 0 ||
-			event.ctrlKey ||
-			event.metaKey ||
-			event.shiftKey ||
-			event.altKey
-		) {
+		const button = event.target.closest('button[data-archive-url]');
+		if (!button) {
 			return;
 		}
-		event.preventDefault();
 
 		dialog.querySelector('[data-archive-name]').textContent =
-			link.dataset.archiveName;
+			button.dataset.archiveName;
 		dialog.querySelector('[data-archive-reason]').textContent =
-			link.dataset.archiveReason;
-		// The same address the confirmation page posts to.
-		form.action = link.pathname;
+			button.dataset.archiveReason;
+		form.action = button.dataset.archiveUrl;
 		dialog.showModal();
 	});
 

@@ -2,8 +2,6 @@
 
 {% block title %}Slack Channel Panel{% endblock %}
 
-{% from "macros/archive.njk" import archiveReason, archiveEffects %}
-
 {% block content %}
 
     {# A table heading that sorts by its column when clicked. `link` is from
@@ -24,6 +22,15 @@
             </a>
         </th>
     {% endmacro %}
+
+    {# Why the dashboard offers to archive a channel. #}
+    {% macro archiveReason(channel) -%}
+        {%- if channel.inactive -%}
+            Nobody has posted in this channel in the last 30 days.
+        {%- else -%}
+            This channel has fewer than 2 members.
+        {%- endif -%}
+    {%- endmacro %}
 
     {% if error %}
         <div class="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
@@ -199,13 +206,13 @@
                             </td>
                             <td class="px-2 py-3 text-right sm:px-4">
                                 {# Only for quiet channels that are ours to archive. Asks to
-                                   confirm first: in a modal (archive-dialog.js), or on a
-                                   confirmation page without JavaScript. #}
+                                   confirm first, in a modal (archive-dialog.js). #}
                                 {% if channel.canArchive %}
-                                    <a href="/channels/{{ channel.id }}/archive"
+                                    <button type="button"
+                                        data-archive-url="/channels/{{ channel.id }}/archive"
                                         data-archive-name="{{ channel.name }}"
                                         data-archive-reason="{{ archiveReason(channel) }}"
-                                        class="inline-block rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900">Archive<span class="sr-only"> #{{ channel.name }}</span></a>
+                                        class="inline-block cursor-pointer rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900">Archive<span class="sr-only"> #{{ channel.name }}</span></button>
                                 {% endif %}
                             </td>
                             {% endif %}
@@ -252,7 +259,9 @@
             class="m-auto w-[calc(100%-2rem)] max-w-lg rounded-lg border border-gray-200 bg-white p-6 text-gray-900 shadow-lg backdrop:bg-gray-900/50">
             <h2 id="archive-dialog-title" class="text-lg font-semibold">Archive #<span data-archive-name></span>?</h2>
             <p class="mt-2 text-sm text-gray-600" data-archive-reason></p>
-            <p class="mt-2 text-sm text-gray-600">{{ archiveEffects() }}</p>
+            <p class="mt-2 text-sm text-gray-600">
+                Archiving removes it from people's channel list and stops new messages. Its history stays searchable, and it can be unarchived in Slack.
+            </p>
             <div class="mt-6 flex items-center gap-3">
                 <form method="post" data-archive-form>
                     <button class="cursor-pointer rounded-md bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900">

@@ -63,13 +63,13 @@ router.get('/', (req, res) => {
 
 	// Only show an error if there's nothing else to show.
 	if (error && channels.length === 0) {
-		// 502 Bad Gateway: the page failed because Slack, which we depend on, did.
+		// 502 Bad Gateway: the page failed because Slack fetch did.
 		return res
 			.status(502)
 			.render('index', {error: 'Couldn’t load channels from Slack.'});
 	}
 
-	// The tab counts are of the channels matching the search.
+	// Update active/archived tab counts to be the number of channels matching the search.
 	const matching = channels.filter((channel) =>
 		channel.name.toLowerCase().includes(search),
 	);
@@ -138,7 +138,6 @@ router.get('/', (req, res) => {
 router.post('/channels/:id/archive', async (req, res) => {
 	const channel = getChannel(req.params.id);
 	if (!channel?.canArchive) {
-		// E.g. it was archived in another tab, or no longer qualifies.
 		req.session.notice = {
 			type: 'error',
 			text: 'That channel can’t be archived from the dashboard.',
