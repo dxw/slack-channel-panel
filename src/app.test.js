@@ -289,6 +289,44 @@ describe('sorting', () => {
 	});
 });
 
+describe('searching', () => {
+	let cookie;
+
+	before(async () => {
+		({cookie} = await login('test@dxw.com'));
+	});
+
+	it('shows only channels whose names match, ignoring case and a leading #', async () => {
+		const html = await (await get('/?q=%23QUIET', cookie)).text();
+
+		assert.ok(html.includes('#quiet-channel'));
+		assert.ok(!html.includes('#test-channel'));
+		assert.ok(html.includes('Showing 1–1 of 1 channels'));
+		assert.ok(html.includes('value="#QUIET"'));
+	});
+
+	it('counts matching channels on each tab, and keeps the search when switching', async () => {
+		const html = await (await get('/?q=channel', cookie)).text();
+
+		// 32 active channels and 1 archived one have "channel" in their name.
+		assert.ok(html.includes('href="/?status=archived&amp;q=channel"'));
+		assert.match(html, /Archived\s*<span[^>]*>1<\/span>/);
+	});
+
+	it('keeps the search when sorting and changing page', async () => {
+		const html = await (await get('/?q=zz', cookie)).text();
+
+		assert.ok(html.includes('href="/?q=zz&amp;page=2"'));
+		assert.ok(html.includes('href="/?q=zz&amp;sort=members&amp;dir=desc"'));
+	});
+
+	it('says when nothing matches', async () => {
+		const html = await (await get('/?q=nothing-like-this', cookie)).text();
+
+		assert.ok(html.includes('No active channels match “nothing-like-this”.'));
+	});
+});
+
 describe('when Slack fails', () => {
 	let cookie;
 
