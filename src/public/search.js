@@ -49,7 +49,7 @@ if (form) {
 			}
 			history.replaceState(null, '', url);
 			status.textContent =
-				page.getElementById('search-summary')?.textContent ?? '';
+				document.getElementById('search-summary')?.textContent ?? '';
 		} catch (error) {
 			if (error.name !== 'AbortError') {
 				// Fall back to loading the page normally.
