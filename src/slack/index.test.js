@@ -240,6 +240,7 @@ describe('isArchivable', () => {
 		hostTeamId: 'T_OURS',
 		memberCount: 5,
 		inactive: true,
+		created: new Date('2020-01-01T00:00:00Z'),
 	};
 
 	it('is true for an inactive channel', () => {
@@ -283,6 +284,16 @@ describe('isArchivable', () => {
 
 	it('is false for a Slack Connect channel when our team is not known', () => {
 		assert.ok(!isArchivable({...quietChannel, isExternal: true}, null));
+	});
+
+	it('is false for a channel less than a week old', () => {
+		const now = new Date('2026-11-13T12:00:00Z').getTime();
+		const sixDaysAgo = new Date('2026-11-07T12:00:00Z');
+		const weekAgo = new Date('2026-11-06T12:00:00Z');
+		assert.ok(
+			!isArchivable({...quietChannel, created: sixDaysAgo}, 'T_OURS', now),
+		);
+		assert.ok(isArchivable({...quietChannel, created: weekAgo}, 'T_OURS', now));
 	});
 
 	it('is false for #general and archived channels', () => {

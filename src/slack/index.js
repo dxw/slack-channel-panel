@@ -16,6 +16,9 @@ import {fakeChannels, fakeMessages, FAKE_TEAM_ID} from './fake-channels.js';
 const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 // conversations.history allows about 50 calls a minute, so pause between channels.
 const PAUSE_BETWEEN_CHANNELS_MS = 1200;
+// Channels younger than this aren't offered for archiving, as they may not
+// have been used yet.
+const NEW_CHANNEL_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
 
 /** @typedef {import('./api.js').Channel} Channel */
 /** @typedef {import('./activity.js').Activity} Activity */
@@ -61,14 +64,16 @@ const isOurs = (channel, ownTeamId) =>
 
 /**
  * Whether the dashboard offers to archive a channel: it's quiet (inactive, or
- * fewer than 2 members), the bot is in it (so we know its activity, and Slack
- * lets the bot archive it), and it's ours to archive.
+ * fewer than 2 members), at least a week old, the bot is in it (so we know its
+ * activity, and Slack lets the bot archive it), and it's ours to archive.
  * @param {Channel & {inactive: boolean}} channel
  * @param {string | null} ownTeamId
+ * @param {number} [now] Current time in ms.
  */
-export const isArchivable = (channel, ownTeamId) =>
+export const isArchivable = (channel, ownTeamId, now = Date.now()) =>
 	!channel.isArchived &&
 	!channel.isGeneral &&
+	now - channel.created.getTime() >= NEW_CHANNEL_MS &&
 	channel.isMember &&
 	isOurs(channel, ownTeamId) &&
 	(channel.inactive || channel.memberCount < 2);
@@ -227,7 +232,7 @@ const withActivity = (channel, now) => {
 	};
 	return {
 		...withInactive,
-		canArchive: isArchivable(withInactive, state.ownTeamId),
+		canArchive: isArchivable(withInactive, state.ownTeamId, now),
 		slackUrl: slackChannelUrl(channel.id, state.ownTeamId),
 	};
 };
@@ -296,6 +301,7 @@ const checkStillArchivable = async (token, id, now) => {
 			inactive: !fresh.isArchived && isInactive(activity, now),
 		},
 		state.ownTeamId,
+		now,
 	);
 };
 
