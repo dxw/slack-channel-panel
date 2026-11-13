@@ -133,20 +133,17 @@ router.get('/', (req, res) => {
 	});
 });
 
-// Asks to confirm before archiving a channel.
-router.get('/channels/:id/archive', (req, res) => {
-	const channel = getChannel(req.params.id);
-	if (!channel?.canArchive) {
-		return res.status(404).render('archive', {channel: null});
-	}
-	res.render('archive', {channel});
-});
-
-// Archives a channel, then goes back to the dashboard with a message.
+// Archives a channel, then goes back to the dashboard with a message. The
+// dashboard asks to confirm first, in a modal.
 router.post('/channels/:id/archive', async (req, res) => {
 	const channel = getChannel(req.params.id);
 	if (!channel?.canArchive) {
-		return res.status(404).render('archive', {channel: null});
+		// E.g. it was archived in another tab, or no longer qualifies.
+		req.session.notice = {
+			type: 'error',
+			text: 'That channel can’t be archived from the dashboard.',
+		};
+		return res.redirect('/');
 	}
 	try {
 		await archiveChannelById({

@@ -394,7 +394,23 @@ describe('archiving a channel', () => {
 		assert.ok(!rowFor(html, 'test-channel').includes('Archive'));
 	});
 
-	it('asks to confirm first', async () => {
+	it('gives the modal what it needs to ask to confirm', async () => {
+		const html = await (await get('/', cookie)).text();
+
+		assert.ok(html.includes('<dialog id="archive-dialog"'));
+		assert.ok(
+			rowFor(html, 'quiet-channel').includes(
+				'data-archive-reason="Nobody has posted in this channel in the last 30 days."',
+			),
+		);
+		assert.ok(
+			rowFor(html, 'zz-channel-00').includes(
+				'data-archive-reason="This channel has fewer than 2 members."',
+			),
+		);
+	});
+
+	it('asks to confirm first, without JavaScript', async () => {
 		const res = await get('/channels/C789/archive', cookie);
 		const html = await res.text();
 
