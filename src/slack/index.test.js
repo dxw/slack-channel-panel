@@ -117,7 +117,7 @@ describe('refreshChannels', () => {
 		]);
 	});
 
-	it('only joins Slack Connect channels hosted by our own organisation', async () => {
+	it('leaves out Slack Connect channels hosted by another organisation', async () => {
 		const fetch = fakeSlack({
 			'conversations.list': () => ({
 				channels: [
@@ -152,13 +152,14 @@ describe('refreshChannels', () => {
 			'auth.test',
 			// Slack Connect channels' details, for who they're shared with.
 			'conversations.info C4',
-			'conversations.info C5',
-			'conversations.info C6',
-			'conversations.info C7',
 			'conversations.join C4',
 			'conversations.history C4',
-			'conversations.history C7',
 		]);
+		// C6 has no host given, so we can't tell it's ours.
+		assert.deepEqual(
+			getChannelData(now).channels.map((channel) => channel.name),
+			['hosted-by-us'],
+		);
 	});
 
 	it('gets the names of other organisations in Slack Connect channels', async () => {
@@ -166,8 +167,14 @@ describe('refreshChannels', () => {
 			'conversations.list': () => ({
 				// conversations.list doesn't say who channels are shared with.
 				channels: [
-					slackChannel('C4', 'shared', {is_ext_shared: true}),
-					slackChannel('C5', 'also-shared', {is_ext_shared: true}),
+					slackChannel('C4', 'shared', {
+						is_ext_shared: true,
+						conversation_host_id: 'T_OURS',
+					}),
+					slackChannel('C5', 'also-shared', {
+						is_ext_shared: true,
+						conversation_host_id: 'T_OURS',
+					}),
 				],
 				response_metadata: {},
 			}),

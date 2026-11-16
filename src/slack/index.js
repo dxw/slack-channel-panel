@@ -193,22 +193,22 @@ export const refreshChannels = async ({
 	state.refreshing = true;
 
 	try {
-		const channels = await listChannels(token);
-		state.channels = channels;
-		state.error = null;
-		// Needed to tell which Slack Connect channels are ours to join or archive.
+		const allChannels = await listChannels(token);
+		// Needed to tell which Slack Connect channels are ours.
 		const ownTeamId = (await getOwnTeamId(token)) ?? null;
+		// Leave out Slack Connect channels another organisation owns
+		const channels = allChannels.filter((channel) =>
+			isOurs(channel, ownTeamId),
+		);
+		state.channels = channels;
 		state.ownTeamId = ownTeamId;
+		state.error = null;
 		await fetchSharedTeamIds(token, channels, pauseMs);
 		await fetchTeamNames(token, channels, ownTeamId);
 
-		// Only check channels the bot is in, or can join. It joins Slack Connect
-		// channels only if they're hosted by our own organisation, never ones
-		// another organisation owns and has shared with us.
-		const canJoin = (channel) => joinChannels && isOurs(channel, ownTeamId);
+		// Only check channels the bot is in, or can join.
 		const toCheck = channels.filter(
-			(channel) =>
-				!channel.isArchived && (channel.isMember || canJoin(channel)),
+			(channel) => !channel.isArchived && (channel.isMember || joinChannels),
 		);
 		const checkedIds = new Set(toCheck.map((channel) => channel.id));
 		for (const id of state.activity.keys()) {
@@ -252,7 +252,10 @@ export const refreshChannels = async ({
 
 /** Fills the store with made-up channels, without calling Slack. */
 const loadFakeChannels = () => {
-	state.channels = fakeChannels.map(toChannel);
+	// Like a real refresh, channels another organisation owns are left out.
+	state.channels = fakeChannels
+		.map(toChannel)
+		.filter((channel) => isOurs(channel, FAKE_TEAM_ID));
 	// Like a real refresh, archived channels aren't checked.
 	for (const channel of state.channels.filter((c) => !c.isArchived)) {
 		state.activity.set(

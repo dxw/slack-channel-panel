@@ -44,7 +44,7 @@ export const fakeChannels = names.map((name, i) => ({
 	is_general: name === 'general',
 	is_member: true,
 	// Slack Connect channels: #project-borealis is hosted by another
-	// organisation, and #design is hosted by us.
+	// organisation, so it isn't shown, and #design is hosted by us.
 	is_ext_shared: name === 'project-borealis' || name === 'design',
 	conversation_host_id: name === 'project-borealis' ? 'TOTHER' : FAKE_TEAM_ID,
 	shared_team_ids:
@@ -53,8 +53,8 @@ export const fakeChannels = names.map((name, i) => ({
 			: name === 'design'
 				? [FAKE_TEAM_ID, 'TOTHER', 'TPARTNER']
 				: undefined,
-	// #pets is small but busy, and #project-borealis small but not ours, so
-	// neither can be archived; #general can never be archived.
+	// #pets is small but busy, so it can't be archived; #general can never be
+	// archived.
 	num_members:
 		name === 'pets'
 			? 2
