@@ -95,6 +95,16 @@ describe('toChannel', () => {
 		);
 	});
 
+	it('undoes Slack’s escaping in the purpose', () => {
+		assert.equal(
+			toChannel({
+				...slackChannel,
+				purpose: {value: 'R&amp;D &lt;tax&gt; credits, not &amp;lt;'},
+			}).purpose,
+			'R&D <tax> credits, not &lt;',
+		);
+	});
+
 	it('marks the #general channel', () => {
 		assert.equal(
 			toChannel({...slackChannel, is_general: true}).isGeneral,
