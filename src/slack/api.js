@@ -20,7 +20,6 @@ const MAX_RETRIES = 3; // number of retries after being rate limited by Slack
  *   every Slack team (organisation) in the channel, which may include ours.
  *   Empty for other channels.
  * @property {number} memberCount Members, not counting the Slack bot.
- * @property {string} topic
  * @property {string} purpose
  * @property {Date} created
  * @property {Date | null} archivedAt When an archived channel was archived,
@@ -49,7 +48,6 @@ export const toChannel = (channel) => {
 			]),
 		],
 		memberCount: Math.max((channel.num_members ?? 0) - (isMember ? 1 : 0), 0),
-		topic: channel.topic?.value ?? '',
 		purpose: channel.purpose?.value ?? '',
 		created: new Date(channel.created * 1000),
 		// Slack has no "archived at" field. `updated` is when the channel's
