@@ -11,10 +11,6 @@ export const CACHE_FILE = fileURLToPath(
 	new URL('../../.cache/channels.json', import.meta.url),
 );
 
-// Bump this when the shape of the saved data changes (e.g. a new field on
-// Channel), so older files are ignored instead of loaded with missing fields.
-const CACHE_VERSION = 1;
-
 /** @typedef {import('./api.js').Channel} Channel */
 /** @typedef {import('./activity.js').Activity} Activity */
 
@@ -37,7 +33,6 @@ export const saveCache = (file, data) => {
 	fs.writeFileSync(
 		file,
 		JSON.stringify({
-			version: CACHE_VERSION,
 			channels: data.channels,
 			activity: [...data.activity],
 			teamNames: [...data.teamNames],
@@ -53,8 +48,8 @@ export const saveCache = (file, data) => {
 const toDate = (value) => (value === null ? null : new Date(value));
 
 /**
- * Loads channel data saved by saveCache. Returns null if there's no file, it
- * can't be read, or it was saved in an older format.
+ * Loads channel data saved by saveCache. Returns null if there's no file or
+ * it can't be read.
  * @param {string} file
  * @returns {CachedData | null}
  */
@@ -65,10 +60,6 @@ export const loadCache = (file) => {
 	} catch {
 		return null;
 	}
-	if (json.version !== CACHE_VERSION) {
-		return null;
-	}
-
 	// JSON has no dates, so turn the date strings back into Dates.
 	return {
 		channels: json.channels.map((channel) => ({
