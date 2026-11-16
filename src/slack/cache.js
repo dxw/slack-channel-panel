@@ -57,6 +57,11 @@ const toDate = (value) => (value === null ? null : new Date(value));
 export const loadCache = (file) => {
 	try {
 		const json = JSON.parse(fs.readFileSync(file, 'utf8'));
+		if (
+			!json.channels.every((channel) => Array.isArray(channel?.sharedTeamIds))
+		) {
+			return null;
+		}
 		// JSON has no dates, so turn the date strings back into Dates.
 		return {
 			channels: json.channels.map((channel) => ({
