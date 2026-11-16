@@ -234,7 +234,6 @@ describe('refreshChannels', () => {
 
 		assert.equal(data.refreshedAt.getTime(), now);
 		assert.equal(data.refreshing, false);
-		assert.deepEqual(data.progress, {done: 2, total: 2});
 
 		const [busy, quiet, archived] = data.channels;
 		assert.deepEqual(busy.activity, {

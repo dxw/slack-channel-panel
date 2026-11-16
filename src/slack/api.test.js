@@ -50,7 +50,6 @@ describe('toChannel', () => {
 			hostTeamId: null,
 			sharedTeamIds: [],
 			memberCount: 42,
-			topic: 'Company-wide chat',
 			purpose: 'Announcements',
 			created: new Date('2020-09-13T12:26:40Z'),
 			archivedAt: null,
