@@ -197,10 +197,10 @@ export const refreshChannels = async ({
 		state.channels = channels;
 		state.error = null;
 		// Needed to tell which Slack Connect channels are ours to join or archive.
-		const ownTeamId = await getOwnTeamId(token);
-		state.ownTeamId = ownTeamId ?? null;
+		const ownTeamId = (await getOwnTeamId(token)) ?? null;
+		state.ownTeamId = ownTeamId;
 		await fetchSharedTeamIds(token, channels, pauseMs);
-		await fetchTeamNames(token, channels, state.ownTeamId);
+		await fetchTeamNames(token, channels, ownTeamId);
 
 		// Only check channels the bot is in, or can join. It joins Slack Connect
 		// channels only if they're hosted by our own organisation, never ones
