@@ -38,7 +38,6 @@ const emptyState = () => ({
 	/** @type {Date | null} */
 	refreshedAt: null,
 	refreshing: false,
-	progress: {done: 0, total: 0},
 	/** @type {string | null} */
 	error: null,
 	/** The ID of our own Slack team (organisation). @type {string | null} */
@@ -217,7 +216,6 @@ export const refreshChannels = async ({
 				state.activity.delete(id);
 			}
 		}
-		state.progress = {done: 0, total: toCheck.length};
 		console.log(
 			`Checking activity in ${toCheck.length} channels` +
 				(joinChannels ? '' : ' (only ones the bot is already in)'),
@@ -237,7 +235,6 @@ export const refreshChannels = async ({
 				state.activity.delete(channel.id);
 				console.error(`Couldn’t check #${channel.name}: ${error.message}`);
 			}
-			state.progress.done += 1;
 			await pause(pauseMs);
 		}
 
@@ -367,7 +364,6 @@ export const getChannelData = (now = Date.now()) => ({
 	channels: state.channels.map((channel) => withActivity(channel, now)),
 	refreshedAt: state.refreshedAt,
 	refreshing: state.refreshing,
-	progress: {...state.progress},
 	error: state.error,
 });
 

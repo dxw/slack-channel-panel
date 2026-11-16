@@ -55,7 +55,7 @@ router.get('/', (req, res) => {
 	const q = String(req.query.q ?? '').trim();
 	const search = q.replace(/^#/, '').toLowerCase();
 
-	const {channels, refreshedAt, refreshing, progress, error} = getChannelData();
+	const {channels, refreshedAt, refreshing, error} = getChannelData();
 
 	// A one-off message from the last action, e.g. archiving a channel.
 	const notice = req.session.notice;
@@ -128,7 +128,6 @@ router.get('/', (req, res) => {
 		},
 		refreshedAt,
 		refreshing,
-		progress,
 		notice,
 	});
 });
