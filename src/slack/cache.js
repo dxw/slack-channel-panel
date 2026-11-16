@@ -48,33 +48,33 @@ export const saveCache = (file, data) => {
 const toDate = (value) => (value === null ? null : new Date(value));
 
 /**
- * Loads channel data saved by saveCache. Returns null if there's no file or
- * it can't be read.
+ * Loads channel data saved by saveCache. Returns null if there's no file, it
+ * can't be read, or it isn't in the shape saveCache writes (e.g. it was saved
+ * by an older version of the app), so the app refreshes from Slack instead.
  * @param {string} file
  * @returns {CachedData | null}
  */
 export const loadCache = (file) => {
-	let json;
 	try {
-		json = JSON.parse(fs.readFileSync(file, 'utf8'));
+		const json = JSON.parse(fs.readFileSync(file, 'utf8'));
+		// JSON has no dates, so turn the date strings back into Dates.
+		return {
+			channels: json.channels.map((channel) => ({
+				...channel,
+				created: new Date(channel.created),
+				archivedAt: toDate(channel.archivedAt),
+			})),
+			activity: new Map(
+				json.activity.map(([id, activity]) => [
+					id,
+					{...activity, lastMessageAt: toDate(activity.lastMessageAt)},
+				]),
+			),
+			teamNames: new Map(json.teamNames),
+			ownTeamId: json.ownTeamId,
+			refreshedAt: new Date(json.refreshedAt),
+		};
 	} catch {
 		return null;
 	}
-	// JSON has no dates, so turn the date strings back into Dates.
-	return {
-		channels: json.channels.map((channel) => ({
-			...channel,
-			created: new Date(channel.created),
-			archivedAt: toDate(channel.archivedAt),
-		})),
-		activity: new Map(
-			json.activity.map(([id, activity]) => [
-				id,
-				{...activity, lastMessageAt: toDate(activity.lastMessageAt)},
-			]),
-		),
-		teamNames: new Map(json.teamNames),
-		ownTeamId: json.ownTeamId,
-		refreshedAt: new Date(json.refreshedAt),
-	};
 };

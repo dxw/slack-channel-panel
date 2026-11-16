@@ -63,4 +63,11 @@ describe('saveCache and loadCache', () => {
 
 		assert.equal(loadCache(file), null);
 	});
+
+	it('returns null for a file saved in an older format', () => {
+		fs.mkdirSync(path.dirname(file), {recursive: true});
+		fs.writeFileSync(file, JSON.stringify({version: 0, channels: []}));
+
+		assert.equal(loadCache(file), null);
+	});
 });
