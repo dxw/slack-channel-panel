@@ -52,7 +52,6 @@ app.set('view engine', 'njk');
 
 // Middleware
 app.use(express.urlencoded({extended: true}));
-app.use(express.json());
 
 // Auth
 const oidcConfig = await buildOidcConfig();

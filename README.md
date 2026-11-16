@@ -23,9 +23,9 @@ DEV_AUTH=true        # sign in with any @dxw.com email address
 SLACK_FAKE_DATA=true # use made-up channels
 ```
 
-If using real data from Slack, the Slack is saved to `.cache/channels.json` in development, so
-restarting the server doesn't refresh it again. Delete the file to refresh from
-Slack on the next start.
+If using real data from Slack, the Slack data is saved to `.cache/channels.json`
+in development, so restarting the server doesn't refresh it again. Delete the
+file to refresh from Slack on the next start.
 
 ## Configuration
 
@@ -48,4 +48,6 @@ npm run lint
 ```
 
 ## Deployment
-The production app is deployed using Heroku. The deployment runs automatically on pushes to main.
+
+The production app is deployed using Heroku. The deployment runs automatically
+on pushes to main.

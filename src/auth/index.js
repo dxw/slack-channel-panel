@@ -194,14 +194,4 @@ export const registerDevAuthRoutes = (app) => {
 	});
 
 	registerLogoutRoutes(app);
-
-	// Test-only endpoint: creates an authenticated session without going through Google SSO.
-	//   app.post("/test/session", express.json(), (req, res) => {
-	//     const { email } = req.body ?? {};
-	//     if (!isAllowedEmail(email)) {
-	//       return res.status(400).json({ error: `A valid @${ALLOWED_EMAIL_DOMAIN} email is required.` });
-	//     }
-	//     req.session.user = { email };
-	//     return res.status(201).json({ email });
-	//   });
 };
