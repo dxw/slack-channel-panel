@@ -13,6 +13,9 @@ import {
 	isArchivable,
 	archiveChannelById,
 	NotArchivableError,
+	startBulkArchive,
+	waitForBulkArchive,
+	BulkArchiveRunningError,
 } from './index.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -357,6 +360,68 @@ describe('isArchivable', () => {
 	it('is false for #general and archived channels', () => {
 		assert.ok(!isArchivable({...quietChannel, isGeneral: true}, 'T_OURS'));
 		assert.ok(!isArchivable({...quietChannel, isArchived: true}, 'T_OURS'));
+	});
+});
+
+describe('startBulkArchive', () => {
+	const start = (ids) =>
+		startBulkArchive({ids, token: 'xoxb-test', pauseMs: 0});
+
+	it('archives the channels that qualify, and records the rest as skipped', async () => {
+		const fetch = fakeSlack({'conversations.archive': () => ({})});
+		await refresh();
+
+		// C1 is busy, and C9 doesn't exist.
+		const id = start(['C1', 'C2', 'C9']);
+		assert.equal(getChannelData(now).bulkArchive.running, true);
+		await waitForBulkArchive();
+
+		assert.deepEqual(getChannelData(now).bulkArchive, {
+			id,
+			running: false,
+			total: 3,
+			done: 3,
+			archived: ['quiet'],
+			skipped: ['busy', 'C9'],
+			failed: [],
+		});
+		assert.deepEqual(
+			calls(fetch).filter((call) => call.startsWith('conversations.archive')),
+			['conversations.archive C2'],
+		);
+		const quiet = getChannelData(now).channels.find((c) => c.id === 'C2');
+		assert.equal(quiet.isArchived, true);
+	});
+
+	it('records channels Slack fails to archive, and carries on', async () => {
+		fakeSlack({
+			'conversations.archive': () => ({ok: false, error: 'ratelimited'}),
+		});
+		await refresh();
+
+		start(['C2']);
+		await waitForBulkArchive();
+
+		const {bulkArchive} = getChannelData(now);
+		assert.deepEqual(bulkArchive.failed, ['quiet']);
+		assert.equal(bulkArchive.running, false);
+	});
+
+	it('refuses to start while another is running', async () => {
+		fakeSlack({'conversations.archive': () => ({})});
+		await refresh();
+
+		start(['C2']);
+		assert.throws(() => start(['C1']), BulkArchiveRunningError);
+		await waitForBulkArchive();
+	});
+
+	it('refuses no channels, or more than 25', () => {
+		assert.throws(() => start([]), RangeError);
+		assert.throws(
+			() => start(Array.from({length: 26}, (_, i) => `C${i}`)),
+			RangeError,
+		);
 	});
 });
 

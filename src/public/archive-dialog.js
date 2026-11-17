@@ -21,18 +21,21 @@ if (dialog) {
 		form.action = button.dataset.archiveUrl;
 		dialog.showModal();
 	});
+}
 
-	// Clicking the dark backdrop around the dialog closes it. Clicks on the
-	// backdrop count as clicks on the dialog, so check they're outside its box.
-	dialog.addEventListener('click', (event) => {
-		const box = dialog.getBoundingClientRect();
+// Clicking the dark backdrop around any dialog on the page (this one, or
+// bulk-archive.js's) closes it. Clicks on the backdrop count as clicks on the
+// dialog, so check they're outside its box.
+for (const modal of document.querySelectorAll('dialog')) {
+	modal.addEventListener('click', (event) => {
+		const box = modal.getBoundingClientRect();
 		const outside =
 			event.clientX < box.left ||
 			event.clientX > box.right ||
 			event.clientY < box.top ||
 			event.clientY > box.bottom;
-		if (event.target === dialog && outside) {
-			dialog.close();
+		if (event.target === modal && outside) {
+			modal.close();
 		}
 	});
 }

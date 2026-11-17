@@ -55,6 +55,8 @@ if (form) {
 				document.getElementById(id)?.replaceWith(page.getElementById(id));
 			}
 			history.replaceState(null, '', url);
+			// Lets bulk-archive.js know the table's checkboxes have changed.
+			document.dispatchEvent(new Event('channels:updated'));
 			status.textContent =
 				document.getElementById('search-summary')?.textContent ?? '';
 		} catch (error) {

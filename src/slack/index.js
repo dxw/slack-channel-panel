@@ -23,6 +23,11 @@ import {CACHE_FILE, saveCache, loadCache} from './cache.js';
 const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 // conversations.history allows about 50 calls a minute, so pause between channels.
 const PAUSE_BETWEEN_CHANNELS_MS = 1200;
+// conversations.archive allows about 20 calls a minute, so pause between
+// channels when archiving several at once.
+const PAUSE_BETWEEN_ARCHIVES_MS = 3000;
+/** The most channels that can be archived at once (one page of the dashboard). */
+export const MAX_BULK_ARCHIVE = 25;
 // Channels younger than this aren't offered for archiving, as they may not
 // have been used yet.
 const NEW_CHANNEL_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
@@ -46,9 +51,30 @@ const emptyState = () => ({
 	teamNames: new Map(),
 	/** Whether the channels are made up, so archiving shouldn't call Slack. */
 	fake: false,
+	/**
+	 * The latest bulk archive (see startBulkArchive), or null if there hasn't been one.
+	 * @type {BulkArchive | null}
+	 */
+	bulkArchive: null,
 });
 
+/**
+ * @typedef {object} BulkArchive
+ * @property {string} id
+ * @property {boolean} running
+ * @property {number} total How many channels were selected.
+ * @property {number} done How many have been dealt with so far.
+ * @property {string[]} archived Names of the channels archived.
+ * @property {string[]} skipped Names of channels not archived because they
+ *   no longer qualify, e.g. they've had new messages.
+ * @property {string[]} failed Names of channels that couldn't be archived
+ *   because of an error, e.g. from Slack.
+ */
+
 let state = emptyState();
+
+/** Finishes when the latest bulk archive does. */
+let bulkArchiveRun = Promise.resolve();
 
 /** Where to save the data between restarts, in development. Null to not save it. @type {string | null} */
 let cacheFile = null;
@@ -368,6 +394,7 @@ export const getChannelData = (now = Date.now()) => ({
 	refreshedAt: state.refreshedAt,
 	refreshing: state.refreshing,
 	error: state.error,
+	bulkArchive: state.bulkArchive && {...state.bulkArchive},
 });
 
 /**
@@ -463,3 +490,116 @@ export const archiveChannelById = async ({id, token, now = Date.now()}) => {
 	saveToCache();
 	return stored;
 };
+
+/** Thrown when a bulk archive is asked for while another is still running. */
+export class BulkArchiveRunningError extends Error {
+	constructor() {
+		super('Some channels are already being archived');
+		this.name = 'BulkArchiveRunningError';
+	}
+}
+
+/**
+ * Archives the channels one at a time, recording how each one went.
+ * @param {BulkArchive} job Updated as it goes.
+ * @param {string[]} ids
+ * @param {string | undefined} token
+ * @param {number} pauseMs
+ */
+const runBulkArchive = async (job, ids, token, pauseMs) => {
+	try {
+		await archiveEach(job, ids, token, pauseMs);
+	} catch (error) {
+		console.error(`Bulk archive stopped: ${error.message}`);
+	} finally {
+		// Always finishes, so a stuck bulk archive can't block the next one.
+		job.running = false;
+	}
+	console.log(
+		`Bulk archive finished: ${job.archived.length} archived, ` +
+			`${job.skipped.length} skipped, ${job.failed.length} failed`,
+	);
+};
+
+/**
+ * The loop for runBulkArchive.
+ * @param {BulkArchive} job
+ * @param {string[]} ids
+ * @param {string | undefined} token
+ * @param {number} pauseMs
+ */
+const archiveEach = async (job, ids, token, pauseMs) => {
+	let calledSlack = false;
+	for (const id of ids) {
+		const channel = getChannel(id);
+		const name = channel?.name ?? id;
+		if (!channel?.canArchive) {
+			// Checked here too, so it doesn't call Slack or pause for nothing.
+			job.skipped.push(name);
+		} else {
+			if (calledSlack && !state.fake) {
+				await pause(pauseMs);
+			}
+			calledSlack = true;
+			try {
+				await archiveChannelById({id, token});
+				job.archived.push(name);
+			} catch (error) {
+				if (error instanceof NotArchivableError) {
+					job.skipped.push(name);
+				} else {
+					job.failed.push(name);
+					console.error(`Couldn’t archive #${name}: ${error.message}`);
+				}
+			}
+		}
+		job.done += 1;
+	}
+};
+
+/**
+ * Starts archiving several channels in the background, one at a time, as
+ * Slack limits how fast channels can be archived. Each one is checked with
+ * Slack first, like archiveChannelById. Returns straight away with the bulk
+ * archive's ID; its progress is in getChannelData().bulkArchive.
+ *
+ * Throws BulkArchiveRunningError if one is already running, and RangeError
+ * for no channels or more than MAX_BULK_ARCHIVE.
+ * @param {object} options
+ * @param {string[]} options.ids The channels' IDs.
+ * @param {string | undefined} options.token Slack bot token.
+ * @param {number} [options.pauseMs] Pause between channels, to respect rate limits.
+ * @returns {string}
+ */
+export const startBulkArchive = ({
+	ids,
+	token,
+	pauseMs = PAUSE_BETWEEN_ARCHIVES_MS,
+}) => {
+	if (state.bulkArchive?.running) {
+		throw new BulkArchiveRunningError();
+	}
+	if (ids.length === 0 || ids.length > MAX_BULK_ARCHIVE) {
+		throw new RangeError(
+			`Can archive 1 to ${MAX_BULK_ARCHIVE} channels at once, not ${ids.length}`,
+		);
+	}
+
+	/** @type {BulkArchive} */
+	const job = {
+		id: crypto.randomUUID(),
+		running: true,
+		total: ids.length,
+		done: 0,
+		archived: [],
+		skipped: [],
+		failed: [],
+	};
+	state.bulkArchive = job;
+	console.log(`Archiving ${ids.length} channels`);
+	bulkArchiveRun = runBulkArchive(job, ids, token, pauseMs);
+	return job.id;
+};
+
+/** Waits for the latest bulk archive to finish. Used by tests. */
+export const waitForBulkArchive = () => bulkArchiveRun;

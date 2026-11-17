@@ -113,7 +113,8 @@ mock.method(globalThis, 'fetch', async (url, options) => {
 	return Response.json({ok: true, ...body});
 });
 
-const {refreshChannels, resetChannelData} = await import('./slack/index.js');
+const {refreshChannels, resetChannelData, waitForBulkArchive} =
+	await import('./slack/index.js');
 await refreshChannels({token: 'xoxb-test', pauseMs: 0});
 
 const {default: app} = await import('./app.js');
@@ -454,5 +455,74 @@ describe('archiving a channel', () => {
 		const html = await (await get('/', cookie)).text();
 
 		assert.ok(!html.includes('#quiet-channel archived.'));
+	});
+});
+
+describe('archiving several channels', () => {
+	let cookie;
+	const rowFor = (html, name) =>
+		html
+			.split('<tr>')
+			.slice(1)
+			.find((row) => row.includes(`#${name}`));
+
+	before(async () => {
+		({cookie} = await login('test@dxw.com'));
+		resetChannelData();
+		await refreshChannels({token: 'xoxb-test', pauseMs: 0});
+	});
+
+	after(async () => {
+		resetChannelData();
+		await refreshChannels({token: 'xoxb-test', pauseMs: 0});
+	});
+
+	it('has a checkbox for each channel that can be archived', async () => {
+		const html = await (await get('/', cookie)).text();
+
+		assert.ok(
+			rowFor(html, 'quiet-channel').includes('name="ids" value="C789"'),
+		);
+		assert.ok(!rowFor(html, 'test-channel').includes('name="ids"'));
+		assert.ok(html.includes('data-select-all'));
+		assert.ok(html.includes('<form id="bulk-archive-form"'));
+	});
+
+	it('archives the ones that qualify, and shows how it went once', async () => {
+		const body = new URLSearchParams([
+			['ids', 'C789'],
+			['ids', 'C123'],
+		]);
+		const res = await post('/channels/archive', {body, cookie});
+		assert.equal(res.status, 302);
+		assert.equal(res.headers.get('location'), '/');
+		await waitForBulkArchive();
+
+		assert.equal(archivedIds.at(-1), 'C789');
+		assert.ok(!archivedIds.includes('C123'));
+		const html = await (await get('/', cookie)).text();
+		assert.ok(html.includes('Archived 1 channel.'));
+		assert.ok(html.includes('no longer qualify'));
+		assert.ok(html.includes('#test-channel.'));
+
+		const again = await (await get('/', cookie)).text();
+		assert.ok(!again.includes('Archived 1 channel.'));
+	});
+
+	it('asks for at least one channel', async () => {
+		await post('/channels/archive', {cookie});
+
+		const html = await (await get('/', cookie)).text();
+		assert.ok(html.includes('Select at least one channel to archive.'));
+	});
+
+	it('refuses more than 25 channels', async () => {
+		const body = new URLSearchParams(
+			Array.from({length: 26}, (_, i) => ['ids', `CZ${i}`]),
+		);
+		await post('/channels/archive', {body, cookie});
+
+		const html = await (await get('/', cookie)).text();
+		assert.ok(html.includes('You can archive at most 25 channels at a time.'));
 	});
 });
