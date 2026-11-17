@@ -51,7 +51,10 @@ if (bulkForm && bulkDialog) {
 	});
 
 	// search.js has replaced the table: its checkboxes start unticked.
-	document.addEventListener('channels:updated', update);
+	document.addEventListener('channels:updated', () => {
+		bulkDialog.close();
+		update();
+	});
 	// When the page loads, including going back to it, as browsers can
 	// restore ticked checkboxes.
 	window.addEventListener('pageshow', update);
