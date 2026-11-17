@@ -47,6 +47,14 @@
         </td>
     {% endmacro %}
 
+    {# A spinning circle, for things happening in the background. #}
+    {% macro spinner() %}
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" class="size-5 shrink-0 animate-spin motion-reduce:animate-none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" class="opacity-25"/>
+            <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+    {% endmacro %}
+
     {# Why the dashboard offers to archive a channel. #}
     {% macro archiveReason(channel) -%}
         {%- if channel.inactive -%}
@@ -71,11 +79,29 @@
         <div id="refresh-banner">
         {% if refreshing %}
             <div class="mb-4 flex items-center gap-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800" role="status">
-                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" class="size-5 shrink-0 animate-spin motion-reduce:animate-none">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" class="opacity-25"/>
-                    <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-                </svg>
+                {{ spinner() }}
                 <span>Data is refreshing. Please check back in a few minutes.</span>
+            </div>
+        {% endif %}
+        {# Everyone sees that a bulk archive is running. #}
+        {% if bulkArchiving %}
+            <div class="mb-4 flex items-center gap-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800" role="status">
+                {{ spinner() }}
+                <span>Archiving {{ bulkArchiving.total }} {{ 'channel' if bulkArchiving.total == 1 else 'channels' }}: {{ bulkArchiving.done }} done so far. Reload the page to check progress.</span>
+            </div>
+        {% endif %}
+        {# How a bulk archive went, shown once to the person who started it. #}
+        {% if bulkArchiveSummary %}
+            {% set summary = bulkArchiveSummary %}
+            {% set allArchived = not (summary.skipped | length) and not (summary.failed | length) %}
+            <div class="mb-4 space-y-1 rounded-md border p-4 text-sm {{ 'border-green-200 bg-green-50 text-green-800' if allArchived else 'border-amber-200 bg-amber-50 text-amber-900' }}" role="status">
+                <p>Archived {{ summary.archived | length }} {{ 'channel' if (summary.archived | length) == 1 else 'channels' }}.</p>
+                {% if summary.skipped | length %}
+                    <p>Not archived, as they no longer qualify (for example, they’ve had new messages or members): #{{ summary.skipped | join(', #') }}.</p>
+                {% endif %}
+                {% if summary.failed | length %}
+                    <p>Couldn’t archive, so try again or archive them in Slack: #{{ summary.failed | join(', #') }}.</p>
+                {% endif %}
             </div>
         {% endif %}
         </div>
@@ -131,6 +157,17 @@
            updates the results. Outside the results, so it stays on the page. #}
         <p id="search-status" class="sr-only" aria-live="polite"></p>
 
+        {# Archives the ticked channels together. The checkboxes are in the
+           table, linked to this form by their `form` attribute. bulk-archive.js
+           shows this once a channel is ticked, and asks to confirm first.
+           Outside the results, as search.js replaces those. #}
+        <form id="bulk-archive-form" method="post" action="/channels/archive" hidden
+            class="mt-4 flex items-center justify-between gap-3 rounded-md border border-gray-200 bg-white px-4 py-2 text-sm shadow-sm">
+            <p><span data-bulk-count></span> selected</p>
+            <button type="button" data-bulk-open
+                class="cursor-pointer rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900">Archive selected</button>
+        </form>
+
         {# Everything search.js replaces when the results change. #}
         <div id="channel-results">
         {% if q %}
@@ -151,6 +188,14 @@
                             <th scope="col" class="hidden px-2 py-3 sm:px-4 lg:table-cell">Description</th>
                             {{ sortHeader('Archived', sortLinks.archived, 'w-28 px-2 py-3 sm:px-4') }}
                         {% else %}
+                            {# Ticks every channel on this page that can be archived
+                               (bulk-archive.js). Hidden on phones, where there's no room. #}
+                            <th scope="col" class="hidden w-10 py-3 pr-0 pl-2 sm:table-cell sm:pl-4">
+                                <input type="checkbox" data-select-all
+                                    aria-label="Select all channels on this page that can be archived"
+                                    {% if not (channels | selectattr('canArchive') | length) %}disabled{% endif %}
+                                    class="size-4 cursor-pointer accent-gray-900 disabled:cursor-default">
+                            </th>
                             {{ sortHeader('Name', sortLinks.name, 'w-[40%] px-2 py-3 sm:w-[30%] sm:px-4 lg:w-56') }}
                             {{ sortHeader('Members', sortLinks.members, 'hidden w-24 px-2 py-3 text-right sm:px-4 md:table-cell') }}
                             <th scope="col" class="hidden px-2 py-3 sm:px-4 lg:table-cell">Description</th>
@@ -177,6 +222,14 @@
                                     {% endif %}
                                 </td>
                             {% else %}
+                                <td class="hidden py-3 pr-0 pl-2 sm:table-cell sm:pl-4">
+                                    {% if channel.canArchive %}
+                                        <input type="checkbox" name="ids" value="{{ channel.id }}" form="bulk-archive-form"
+                                            data-bulk-select data-name="{{ channel.name }}"
+                                            aria-label="Select #{{ channel.name }}"
+                                            class="size-4 cursor-pointer accent-gray-900">
+                                    {% endif %}
+                                </td>
                                 {{ nameCell(channel) }}
                                 <td class="hidden px-2 py-3 text-right tabular-nums sm:px-4 md:table-cell">{{ channel.memberCount }}</td>
                                 {{ descriptionCell(channel) }}
@@ -236,7 +289,7 @@
                         </tr>
                     {% else %}
                         <tr>
-                            <td colspan="{{ 3 if archivedTab else 8 }}" class="px-4 py-6 text-center text-gray-500">
+                            <td colspan="{{ 3 if archivedTab else 9 }}" class="px-4 py-6 text-center text-gray-500">
                                 {% if q %}No {{ status }} channels match “{{ q }}”.{% else %}No {{ status }} channels.{% endif %}
                             </td>
                         </tr>
@@ -293,6 +346,32 @@
                 </form>
             </div>
         </dialog>
+
+        {# Asks to confirm archiving the ticked channels. bulk-archive.js fills
+           in the list and opens it. #}
+        <dialog id="bulk-archive-dialog" aria-labelledby="bulk-archive-dialog-title"
+            class="m-auto w-[calc(100%-2rem)] max-w-lg rounded-lg border border-gray-200 bg-white p-6 text-gray-900 shadow-lg backdrop:bg-gray-900/50">
+            <h2 id="bulk-archive-dialog-title" class="text-lg font-semibold">Archive <span data-bulk-dialog-count></span>?</h2>
+            <ul class="mt-2 max-h-48 list-inside list-disc overflow-y-auto text-sm text-gray-600" data-bulk-dialog-list></ul>
+            <p class="mt-2 text-sm text-gray-600">
+                Archiving removes them from people's channel lists and stops new messages. Their history stays searchable, and they can be unarchived in Slack.
+            </p>
+            <p class="mt-2 text-sm text-gray-600">
+                Each channel is checked with Slack first, and skipped if it no longer qualifies. This takes a few seconds per channel.
+            </p>
+            <div class="mt-6 flex items-center gap-3">
+                {# Sends the selection bar's form, with the ticked checkboxes. #}
+                <button form="bulk-archive-form" class="cursor-pointer rounded-md bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900">
+                    Archive channels
+                </button>
+                {# Closes the dialog without sending anything. Gets focus when it opens, so Enter doesn't archive by mistake. #}
+                <form method="dialog">
+                    <button autofocus class="cursor-pointer rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-100 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900">
+                        Cancel
+                    </button>
+                </form>
+            </div>
+        </dialog>
     {% endif %}
 
 {% endblock %}
@@ -300,4 +379,5 @@
 {% block scripts %}
     <script src="/search.js"></script>
     <script src="/archive-dialog.js"></script>
+    <script src="/bulk-archive.js"></script>
 {% endblock %}

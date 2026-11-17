@@ -27,6 +27,13 @@ const MAX_RETRIES = 3; // number of retries after being rate limited by Slack
  */
 
 /**
+ * Undoes Slack's escaping of &, < and > in text such as a channel's purpose.
+ * @param {string} text
+ */
+export const unescapeSlackText = (text) =>
+	text.replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&amp;', '&');
+
+/**
  * Picks the fields we use from a Slack conversation object.
  * @param {any} channel
  * @returns {Channel}
@@ -48,7 +55,7 @@ export const toChannel = (channel) => {
 			]),
 		],
 		memberCount: Math.max((channel.num_members ?? 0) - (isMember ? 1 : 0), 0),
-		purpose: channel.purpose?.value ?? '',
+		purpose: unescapeSlackText(channel.purpose?.value ?? ''),
 		created: new Date(channel.created * 1000),
 		// Slack has no "archived at" field. `updated` is when the channel's
 		// settings last changed (in ms, unlike `created`), and archiving is the

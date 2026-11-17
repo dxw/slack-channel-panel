@@ -4,6 +4,9 @@ import {
 	getChannel,
 	archiveChannelById,
 	NotArchivableError,
+	startBulkArchive,
+	BulkArchiveRunningError,
+	MAX_BULK_ARCHIVE,
 } from '../slack/index.js';
 import {paginate} from '../pagination.js';
 import {SORT_COLUMNS, SORTABLE_ON_TAB, sortChannels} from '../sorting.js';
@@ -55,11 +58,24 @@ router.get('/', (req, res) => {
 	const q = String(req.query.q ?? '').trim();
 	const search = q.replace(/^#/, '').toLowerCase();
 
-	const {channels, refreshedAt, refreshing, error} = getChannelData();
+	const {channels, refreshedAt, refreshing, error, bulkArchive} =
+		getChannelData();
 
 	// A one-off message from the last action, e.g. archiving a channel.
 	const notice = req.session.notice;
 	delete req.session.notice;
+
+	// How a bulk archive went, shown once it's finished, and only to the
+	// person who started it. Everyone sees that one is running.
+	let bulkArchiveSummary = null;
+	if (
+		bulkArchive &&
+		!bulkArchive.running &&
+		req.session.bulkArchiveId === bulkArchive.id
+	) {
+		bulkArchiveSummary = bulkArchive;
+		delete req.session.bulkArchiveId;
+	}
 
 	// Only show an error if there's nothing else to show.
 	if (error && channels.length === 0) {
@@ -129,7 +145,47 @@ router.get('/', (req, res) => {
 		refreshedAt,
 		refreshing,
 		notice,
+		bulkArchiving: bulkArchive?.running ? bulkArchive : null,
+		bulkArchiveSummary,
 	});
+});
+
+// Starts archiving the ticked channels in the background, then goes back to
+// the dashboard, which shows the progress. The dashboard asks to confirm
+// first, in a modal.
+router.post('/channels/archive', (req, res) => {
+	// One ID is sent as a string, several as an array. There's no body at all
+	// if nothing was sent, as Express 5 leaves req.body undefined.
+	const ids = [...new Set([req.body?.ids ?? []].flat().map(String))];
+	if (ids.length === 0) {
+		req.session.notice = {
+			type: 'error',
+			text: 'Select at least one channel to archive.',
+		};
+		return res.redirect('/');
+	}
+	if (ids.length > MAX_BULK_ARCHIVE) {
+		req.session.notice = {
+			type: 'error',
+			text: `You can archive at most ${MAX_BULK_ARCHIVE} channels at a time.`,
+		};
+		return res.redirect('/');
+	}
+	try {
+		req.session.bulkArchiveId = startBulkArchive({
+			ids,
+			token: process.env.SLACK_BOT_TOKEN,
+		});
+	} catch (error) {
+		if (!(error instanceof BulkArchiveRunningError)) {
+			throw error;
+		}
+		req.session.notice = {
+			type: 'error',
+			text: 'Some channels are already being archived. Try again when that’s finished.',
+		};
+	}
+	res.redirect('/');
 });
 
 // Archives a channel, then goes back to the dashboard with a message. The
