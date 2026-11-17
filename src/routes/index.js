@@ -154,8 +154,9 @@ router.get('/', (req, res) => {
 // the dashboard, which shows the progress. The dashboard asks to confirm
 // first, in a modal.
 router.post('/channels/archive', (req, res) => {
-	// One ID is sent as a string, several as an array.
-	const ids = [...new Set([req.body.ids ?? []].flat().map(String))];
+	// One ID is sent as a string, several as an array. There's no body at all
+	// if nothing was sent, as Express 5 leaves req.body undefined.
+	const ids = [...new Set([req.body?.ids ?? []].flat().map(String))];
 	if (ids.length === 0) {
 		req.session.notice = {
 			type: 'error',
