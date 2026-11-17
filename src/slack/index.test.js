@@ -364,6 +364,10 @@ describe('isArchivable', () => {
 });
 
 describe('startBulkArchive', () => {
+	beforeEach(() => {
+		mock.method(Date, 'now', () => now);
+	});
+
 	const start = (ids) =>
 		startBulkArchive({ids, token: 'xoxb-test', pauseMs: 0});
 
