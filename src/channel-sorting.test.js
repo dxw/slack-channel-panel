@@ -1,6 +1,7 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
-import {sortChannels} from './sorting.js';
+import {sortRows} from './public/channel-sorting.js';
+import {toGridRow} from './channel-rows.js';
 
 /** @type {(name: string, extra?: object) => object} */
 const channel = (name, extra = {}) => ({
@@ -20,7 +21,11 @@ const activity = (messagesLastMonth, lastMessageAt) => ({
 
 const names = (channels) => channels.map((c) => c.name);
 
-describe('sortChannels', () => {
+/** Sorts channels as the grid does, by turning them into its rows first. */
+const sortChannels = (channels, column, direction) =>
+	sortRows(channels.map(toGridRow), column, direction);
+
+describe('sortRows', () => {
 	it('sorts by name A–Z and Z–A', () => {
 		const channels = [channel('b'), channel('c'), channel('a')];
 
@@ -159,10 +164,10 @@ describe('sortChannels', () => {
 	});
 
 	it('does not change the original array', () => {
-		const channels = [channel('b'), channel('a')];
+		const rows = [channel('b'), channel('a')].map(toGridRow);
 
-		sortChannels(channels, 'name', 'asc');
+		sortRows(rows, 'name', 'asc');
 
-		assert.deepEqual(names(channels), ['b', 'a']);
+		assert.deepEqual(names(rows), ['b', 'a']);
 	});
 });
