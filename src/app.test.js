@@ -88,7 +88,7 @@ const slackResponses = {
 	},
 	'conversations.history C789': {
 		messages: [
-			{type: 'message', user: 'U1', ts: String(nowSeconds - 30 * DAY_SECONDS)},
+			{type: 'message', user: 'U1', ts: String(nowSeconds - 200 * DAY_SECONDS)},
 		],
 	},
 };
@@ -241,7 +241,7 @@ describe('when signed in', () => {
 		);
 	});
 
-	it('marks channels with no messages in 30 days as inactive', async () => {
+	it('marks channels with no messages in 6 months as inactive', async () => {
 		const html = await (await get('/', cookie)).text();
 
 		assert.equal(rowFor(html, 'quiet-channel').status, 'inactive');
@@ -378,7 +378,7 @@ describe('archiving a channel', () => {
 		assert.ok(html.includes('<dialog id="archive-dialog"'));
 		assert.equal(
 			rowFor(html, 'quiet-channel').archiveReason,
-			'Nobody has posted in this channel in the last 30 days.',
+			'Nobody has posted in this channel in the last 6 months.',
 		);
 		assert.equal(
 			rowFor(html, 'zz-channel-00').archiveReason,

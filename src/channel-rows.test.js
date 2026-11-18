@@ -22,7 +22,7 @@ describe('toGridRow', () => {
 	it('formats dates in London time', () => {
 		const lastMessageAt = new Date('2026-06-30T23:30:00Z');
 		const row = toGridRow(
-			channel({activity: {lastMessageAt, messagesLastMonth: 3}}),
+			channel({activity: {lastMessageAt, messagesLastSixMonths: 3}}),
 		);
 
 		// 00:30 on 1 July in London.
@@ -33,7 +33,7 @@ describe('toGridRow', () => {
 	it('shows unknown activity as a dash, and none as "No messages"', () => {
 		const unknown = toGridRow(channel());
 		const none = toGridRow(
-			channel({activity: {lastMessageAt: null, messagesLastMonth: 0}}),
+			channel({activity: {lastMessageAt: null, messagesLastSixMonths: 0}}),
 		);
 
 		assert.equal(unknown.lastMessage, '—');
@@ -46,16 +46,18 @@ describe('toGridRow', () => {
 
 	it('shows 100 or more messages as "100+"', () => {
 		const row = toGridRow(
-			channel({activity: {lastMessageAt: new Date(), messagesLastMonth: 150}}),
+			channel({
+				activity: {lastMessageAt: new Date(), messagesLastSixMonths: 150},
+			}),
 		);
 
 		assert.equal(row.messages, '100+');
-		assert.equal(row.messagesLastMonth, 150);
+		assert.equal(row.messagesLastSixMonths, 150);
 	});
 
 	it('works out the status, most urgent first', () => {
 		const status = (extra) => toGridRow(channel(extra)).status;
-		const activity = {lastMessageAt: null, messagesLastMonth: 0};
+		const activity = {lastMessageAt: null, messagesLastSixMonths: 0};
 
 		assert.equal(status({memberCount: 0, inactive: true, activity}), 'empty');
 		assert.equal(status({inactive: true, activity}), 'inactive');
@@ -67,7 +69,7 @@ describe('toGridRow', () => {
 	it('says why a channel can be archived', () => {
 		assert.equal(
 			toGridRow(channel({canArchive: true, inactive: true})).archiveReason,
-			'Nobody has posted in this channel in the last 30 days.',
+			'Nobody has posted in this channel in the last 6 months.',
 		);
 		assert.equal(
 			toGridRow(channel({canArchive: true, memberCount: 1})).archiveReason,

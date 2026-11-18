@@ -108,7 +108,7 @@ const posts = (recentPosts, lastPostDaysAgo) =>
 
 /**
  * Made-up recent messages for each channel, keyed by channel ID.
- * Some are busy, some quiet, and some inactive (no messages in 30 days).
+ * Some are busy, some quiet, and some inactive (no messages in 6 months).
  * @type {Record<string, object[]>}
  */
 export const fakeMessages = Object.fromEntries(
@@ -117,8 +117,8 @@ export const fakeMessages = Object.fromEntries(
 			{
 				// Active only because a bot posts in it.
 				'ops-alerts': [botPost(0.1), botPost(1), joined(2), personPost(40)],
-				// Inactive: last message a month ago.
-				'book-club': [joined(1), personPost(30)],
+				// Inactive: last message over 6 months ago.
+				'book-club': [joined(1), personPost(200)],
 				// Inactive: never used.
 				running: [joined(1)],
 				// Active only because of a recent thread reply.

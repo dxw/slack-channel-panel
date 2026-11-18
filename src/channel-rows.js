@@ -9,7 +9,7 @@ const formatDate = (date) => date.toLocaleDateString('en-GB', LONDON_DATE);
 
 /**
  * The channel's status, most urgent first: nobody in it (not counting the
- * bot), no messages in 30 days, has messages, or the bot can't see them.
+ * bot), no messages in 6 months, has messages, or the bot can't see them.
  * @param {any} channel
  * @returns {'empty' | 'inactive' | 'active' | 'unknown' | 'unchecked'}
  */
@@ -35,7 +35,7 @@ const statusOf = (channel) => {
 export const toGridRow = (channel) => {
 	const {activity} = channel;
 	const lastMessageAt = activity?.lastMessageAt ?? null;
-	const messagesLastMonth = activity?.messagesLastMonth ?? null;
+	const messagesLastSixMonths = activity?.messagesLastSixMonths ?? null;
 
 	let lastMessage = '—';
 	if (activity) {
@@ -43,8 +43,9 @@ export const toGridRow = (channel) => {
 	}
 
 	let messages = '—';
-	if (messagesLastMonth !== null) {
-		messages = messagesLastMonth >= 100 ? '100+' : String(messagesLastMonth);
+	if (messagesLastSixMonths !== null) {
+		messages =
+			messagesLastSixMonths >= 100 ? '100+' : String(messagesLastSixMonths);
 	}
 
 	return {
@@ -62,14 +63,14 @@ export const toGridRow = (channel) => {
 		// as the oldest.
 		lastMessageAt: activity ? (lastMessageAt?.getTime() ?? 0) : null,
 		lastMessage,
-		messagesLastMonth,
+		messagesLastSixMonths,
 		messages,
 		status: statusOf(channel),
 		canArchive: Boolean(channel.canArchive),
 		// Why the dashboard offers to archive it, for the confirmation modal.
 		archiveReason: channel.canArchive
 			? channel.inactive
-				? 'Nobody has posted in this channel in the last 30 days.'
+				? 'Nobody has posted in this channel in the last 6 months.'
 				: 'This channel has fewer than 2 members.'
 			: null,
 		archivedAt: channel.archivedAt?.getTime() ?? null,

@@ -19,7 +19,7 @@ export const SORT_COLUMNS = {
 	// A–Z as shown. Channels not shared with anyone go last.
 	sharedWith: {value: (row) => row.sharedWith, firstDirection: 'asc'},
 	lastMessage: {value: (row) => row.lastMessageAt, firstDirection: 'desc'},
-	messages: {value: (row) => row.messagesLastMonth, firstDirection: 'desc'},
+	messages: {value: (row) => row.messagesLastSixMonths, firstDirection: 'desc'},
 	status: {
 		value: (row) => STATUS_ORDER.indexOf(row.status),
 		firstDirection: 'asc',

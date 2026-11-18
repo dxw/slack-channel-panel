@@ -133,6 +133,24 @@ const archiveCell = ({data}) => {
 };
 
 /**
+ * A column heading's label, split onto 2 lines before its brackets, e.g.
+ * "Messages" then "(6 months)".
+ */
+class TwoLineHeader {
+	init({displayName}) {
+		const [first, ...rest] = displayName.split(' (');
+		this.gui = element('span', {}, first);
+		if (rest.length) {
+			this.gui.append(element('br'), `(${rest.join(' (')}`);
+		}
+	}
+
+	getGui() {
+		return this.gui;
+	}
+}
+
+/**
  * A sortable column, sorted the same way as the old table: unknown values
  * last, ties by name, and starting in the column's first direction.
  * @param {string} colId A key of SORT_COLUMNS.
@@ -190,7 +208,8 @@ const COLUMNS = {
 			width: 140,
 		}),
 		sortable('messages', {
-			headerName: 'Messages (30 days)',
+			headerName: 'Messages (6 months)',
+			headerComponentParams: {innerHeaderComponent: TwoLineHeader},
 			field: 'messages',
 			type: 'rightAligned',
 			width: 130,
