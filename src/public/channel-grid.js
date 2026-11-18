@@ -6,8 +6,6 @@
 
 import {SORT_COLUMNS, compareRows} from './channel-sorting.js';
 
-const PAGE_SIZE = 25;
-
 // Tailwind's breakpoints. Less important columns are hidden on smaller
 // screens, so the table never scrolls sideways.
 const BREAKPOINTS = {sm: '40rem', md: '48rem', lg: '64rem', xl: '80rem'};
@@ -268,8 +266,8 @@ if (container) {
 		// The page says when there are no channels, under the search box.
 		suppressOverlays: ['noRows'],
 		pagination: true,
-		paginationPageSize: PAGE_SIZE,
-		paginationPageSizeSelector: false,
+		paginationPageSize: 25,
+		paginationPageSizeSelector: [25, 50, 100],
 		// Channels that can be archived can be ticked, to archive them together
 		// (bulk-archive.js). "Select all" ticks the ones on this page.
 		rowSelection:
