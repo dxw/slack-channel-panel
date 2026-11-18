@@ -104,6 +104,7 @@
            adds their IDs, shows this once a channel is ticked, and asks to
            confirm first. Outside the results, as search.js replaces those. #}
         <form id="bulk-archive-form" method="post" action="/channels/archive" hidden
+            data-max="{{ maxBulkArchive }}"
             class="mt-4 flex items-center justify-between gap-3 rounded-md border border-gray-200 bg-white px-4 py-2 text-sm shadow-sm">
             <p><span data-bulk-count></span> selected</p>
             <div data-bulk-ids hidden></div>

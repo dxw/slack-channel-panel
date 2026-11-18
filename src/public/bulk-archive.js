@@ -10,6 +10,9 @@ const bulkDialog = document.getElementById('bulk-archive-dialog');
 if (bulkForm && bulkDialog) {
 	const count = bulkForm.querySelector('[data-bulk-count]');
 	const ids = bulkForm.querySelector('[data-bulk-ids]');
+	// The most channels that can be archived at once, from the server
+	// (MAX_BULK_ARCHIVE in slack/index.js).
+	const maxBulkArchive = Number(bulkForm.dataset.max);
 
 	/** @param {number} n */
 	const channels = (n) => `${n} ${n === 1 ? 'channel' : 'channels'}`;
@@ -23,6 +26,17 @@ if (bulkForm && bulkDialog) {
 		selected = event.detail;
 		bulkForm.hidden = selected.length === 0;
 		count.textContent = channels(selected.length);
+
+		const overLimit = selected.length > maxBulkArchive;
+		const openButton = bulkForm.querySelector('[data-bulk-open]');
+		openButton.disabled = overLimit;
+		openButton.textContent = overLimit
+			? `Select at most ${maxBulkArchive} channels`
+			: 'Archive selected';
+		if (overLimit) {
+			bulkDialog.close();
+		}
+
 		ids.replaceChildren(
 			...selected.map(({id}) =>
 				Object.assign(document.createElement('input'), {

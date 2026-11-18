@@ -439,6 +439,8 @@ describe('archiving several channels', () => {
 
 		assert.ok(html.includes('<form id="bulk-archive-form"'));
 		assert.ok(html.includes('data-bulk-ids'));
+		// The limit, for bulk-archive.js to stop too many being sent.
+		assert.ok(html.includes('data-max="100"'));
 	});
 
 	it('archives the ones that qualify, and shows how it went once', async () => {

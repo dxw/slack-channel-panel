@@ -90,6 +90,7 @@ router.get('/', (req, res) => {
 		notice,
 		bulkArchiving: bulkArchive?.running ? bulkArchive : null,
 		bulkArchiveSummary,
+		maxBulkArchive: MAX_BULK_ARCHIVE,
 	});
 });
 
