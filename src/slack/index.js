@@ -217,6 +217,11 @@ export const refreshChannels = async ({
 		return;
 	}
 	state.refreshing = true;
+	console.log(
+		joinChannels
+			? 'Data refresh started. The bot will join channels it isn’t in yet.'
+			: 'Data refresh started. The bot won’t join channels it isn’t in (set SLACK_JOIN_CHANNELS=true to let it).',
+	);
 
 	try {
 		const allChannels = await listChannels(token);
