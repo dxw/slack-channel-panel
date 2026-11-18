@@ -167,6 +167,166 @@ const sortable = (colId, colDef) => ({
 	...colDef,
 });
 
+// Filters, opened from each column heading's filter button.
+
+/** Filters by text, e.g. "contains". */
+const textFilter = (filterValueGetter) => ({
+	filter: 'agTextColumnFilter',
+	...(filterValueGetter && {filterValueGetter}),
+});
+
+/** Filters by a number in the row, e.g. "greater than". Unknown values never match. */
+const numberFilter = (key) => ({
+	filter: 'agNumberColumnFilter',
+	filterValueGetter: ({data}) => data[key],
+});
+
+/**
+ * Compares a date in the grid with the filter's, by day, as the filter
+ * expects: negative if the grid's is earlier.
+ * @param {Date} filterDate Midnight on the day in the filter.
+ * @param {Date} cellDate
+ */
+const compareDays = (filterDate, cellDate) => {
+	const day = new Date(
+		cellDate.getFullYear(),
+		cellDate.getMonth(),
+		cellDate.getDate(),
+	);
+	return day.getTime() - filterDate.getTime();
+};
+
+/** Filters by a date in the row (in ms), e.g. "before". No date never matches. */
+const dateFilter = (key) => ({
+	filter: 'agDateColumnFilter',
+	filterValueGetter: ({data}) => (data[key] ? new Date(data[key]) : null),
+	filterParams: {comparator: compareDays},
+});
+
+/**
+ * A filter with a tick box for each value a column can have, all ticked to
+ * start with; untick one to hide those channels. AG Grid's own list filter
+ * isn't in the free version.
+ */
+class TickBoxFilter {
+	/**
+	 * @param {object} params From AG Grid, with our `options` and `valueOf`
+	 *   from the column's `filterParams`.
+	 */
+	init(params) {
+		this.options = params.options;
+		this.valueOf = params.valueOf;
+		this.filterChanged = params.filterChangedCallback;
+		/** The values whose channels are hidden. */
+		this.unticked = new Set();
+
+		this.all = element('input', {
+			type: 'checkbox',
+			class: 'size-4 cursor-pointer accent-gray-900',
+		});
+		this.all.addEventListener('change', () => {
+			this.unticked = new Set(
+				this.all.checked ? [] : this.options.map(({value}) => value),
+			);
+			this.changed();
+		});
+
+		this.boxes = this.options.map(({value}) => {
+			const box = element('input', {
+				type: 'checkbox',
+				class: 'size-4 cursor-pointer accent-gray-900',
+			});
+			box.addEventListener('change', () => {
+				if (box.checked) {
+					this.unticked.delete(value);
+				} else {
+					this.unticked.add(value);
+				}
+				this.changed();
+			});
+			return box;
+		});
+
+		const row = (box, label) =>
+			element(
+				'label',
+				{class: 'flex cursor-pointer items-center gap-2'},
+				box,
+				label,
+			);
+		this.gui = element(
+			'div',
+			{class: 'flex flex-col gap-2 p-3 text-sm'},
+			row(this.all, 'Select all'),
+			element('hr', {class: 'border-gray-200'}),
+			...this.options.map(({label}, i) => row(this.boxes[i], label)),
+		);
+		this.showTicks();
+	}
+
+	getGui() {
+		return this.gui;
+	}
+
+	/** Updates the tick boxes to match what's unticked. */
+	showTicks() {
+		this.options.forEach(({value}, i) => {
+			this.boxes[i].checked = !this.unticked.has(value);
+		});
+		const none = this.unticked.size === this.options.length;
+		this.all.checked = this.unticked.size === 0;
+		// Shows as a dash when only some are ticked.
+		this.all.indeterminate = !this.all.checked && !none;
+	}
+
+	changed() {
+		this.showTicks();
+		this.filterChanged();
+	}
+
+	isFilterActive() {
+		return this.unticked.size > 0;
+	}
+
+	doesFilterPass({data}) {
+		return !this.unticked.has(this.valueOf(data));
+	}
+
+	/** The ticked values, or null if all are (no filter). */
+	getModel() {
+		if (!this.isFilterActive()) {
+			return null;
+		}
+		return {
+			values: this.options
+				.map(({value}) => value)
+				.filter((value) => !this.unticked.has(value)),
+		};
+	}
+
+	setModel(model) {
+		const ticked = new Set(
+			model?.values ?? this.options.map(({value}) => value),
+		);
+		this.unticked = new Set(
+			this.options
+				.map(({value}) => value)
+				.filter((value) => !ticked.has(value)),
+		);
+		this.showTicks();
+	}
+}
+
+/**
+ * Filters by tick boxes, one for each option.
+ * @param {{value: unknown, label: string}[]} options
+ * @param {(data: any) => unknown} valueOf The row's value, one of the options'.
+ */
+const tickBoxFilter = (options, valueOf) => ({
+	filter: TickBoxFilter,
+	filterParams: {options, valueOf},
+});
+
 const nameColumn = sortable('name', {
 	headerName: 'Name',
 	field: 'name',
@@ -174,6 +334,7 @@ const nameColumn = sortable('name', {
 	flex: 1,
 	minWidth: 180,
 	cellRenderer: nameCell,
+	...textFilter(),
 });
 
 const descriptionColumn = {
@@ -195,6 +356,7 @@ const COLUMNS = {
 			// Numbers on the right; the heading stays on the left, like the others.
 			cellClass: 'ag-right-aligned-cell',
 			width: 110,
+			...numberFilter('memberCount'),
 		}),
 		descriptionColumn,
 		sortable('sharedWith', {
@@ -202,11 +364,13 @@ const COLUMNS = {
 			field: 'sharedWith',
 			width: 160,
 			cellRenderer: ({value}) => (value ? clamped(value) : ''),
+			...textFilter(),
 		}),
 		sortable('lastMessage', {
 			headerName: 'Last message',
 			field: 'lastMessage',
 			width: 140,
+			...dateFilter('lastMessageAt'),
 		}),
 		sortable('messages', {
 			headerName: 'Messages (6 months)',
@@ -214,18 +378,30 @@ const COLUMNS = {
 			field: 'messages',
 			cellClass: 'ag-right-aligned-cell',
 			width: 130,
+			...numberFilter('messagesLastSixMonths'),
 		}),
 		sortable('status', {
 			headerName: 'Status',
 			field: 'status',
 			width: 140,
 			cellRenderer: statusCell,
+			...tickBoxFilter(
+				Object.entries(STATUSES).map(([value, {label}]) => ({value, label})),
+				(data) => data.status,
+			),
 		}),
 		sortable('archive', {
 			headerName: 'Archive recommended',
 			field: 'canArchive',
 			width: 140,
 			cellRenderer: archiveCell,
+			...tickBoxFilter(
+				[
+					{value: true, label: 'Yes'},
+					{value: false, label: 'No'},
+				],
+				(data) => data.canArchive,
+			),
 		}),
 	],
 	archived: [
@@ -235,6 +411,7 @@ const COLUMNS = {
 			headerName: 'Archived',
 			field: 'archived',
 			width: 130,
+			...dateFilter('archivedAt'),
 		}),
 	],
 };
@@ -276,6 +453,11 @@ if (container) {
 		columnDefs: columns,
 		defaultColDef: {
 			suppressMovable: true,
+			// Each column says how it's shown and filtered, rather than AG Grid
+			// guessing from the values.
+			cellDataType: false,
+			// Only the filter button: the column menu has nothing useful here.
+			suppressHeaderMenuButton: true,
 			wrapHeaderText: true,
 			autoHeaderHeight: true,
 		},
@@ -283,7 +465,8 @@ if (container) {
 		getRowId: ({data}) => data.id,
 		rowHeight: 56,
 		domLayout: 'autoHeight',
-		// The page says when there are no channels, under the search box.
+		// The page says when there are no channels, under the search box. AG
+		// Grid still says when the filters hide them all.
 		suppressOverlays: ['noRows'],
 		pagination: true,
 		paginationPageSize: 25,
@@ -307,6 +490,18 @@ if (container) {
 			document.dispatchEvent(
 				new CustomEvent('channels:selection', {detail: selected}),
 			);
+		},
+		// Unticks channels the filters hide, so "Archive selected" only
+		// archives channels you can see.
+		onFilterChanged: (event) => {
+			const shown = new Set();
+			event.api.forEachNodeAfterFilter((node) => shown.add(node));
+			const hidden = event.api
+				.getSelectedNodes()
+				.filter((node) => !shown.has(node));
+			if (hidden.length > 0) {
+				event.api.setNodesSelected({nodes: hidden, newValue: false});
+			}
 		},
 		// Enter on a cell with a link or button in it (the channel name, or
 		// Archive) uses it, so they work from the keyboard.
