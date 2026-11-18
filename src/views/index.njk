@@ -4,49 +4,6 @@
 
 {% block content %}
 
-    {# A table heading that sorts by its column when clicked. `link` is from
-       the route's `sortLinks`: the URL to go to, and the current direction if
-       the table is sorted by this column. #}
-    {% macro sortHeader(label, link, classes) %}
-        <th scope="col" class="{{ classes }}"
-            {% if link.current %}aria-sort="{{ 'ascending' if link.current == 'asc' else 'descending' }}"{% endif %}>
-            <a href="{{ link.url }}" class="inline-flex items-center gap-1 rounded hover:text-gray-900 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900 {{ 'text-gray-900' if link.current }}">
-                {{ label }}
-                {# The same chevron icon in every state, so they all match:
-                   up = ascending, down = descending, both = not sorted. #}
-                <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
-                    class="size-4 shrink-0 {{ 'text-gray-900' if link.current else 'text-gray-400' }}">
-                    {% if link.current != 'desc' %}<path d="M5 6.5 8 3.5l3 3"/>{% endif %}
-                    {% if link.current != 'asc' %}<path d="M5 9.5 8 12.5l3-3"/>{% endif %}
-                </svg>
-            </a>
-        </th>
-    {% endmacro %}
-
-    {# The channel's name, linking to it in Slack. Used on both tabs. #}
-    {% macro nameCell(channel) %}
-        <td class="px-2 py-3 font-medium sm:px-4">
-            <div class="flex items-center gap-1.5">
-                <a href="{{ channel.slackUrl }}" target="_blank" rel="noopener"
-                    class="truncate underline decoration-gray-300 underline-offset-2 hover:decoration-gray-900 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900"
-                    title="Open #{{ channel.name }} in Slack">#{{ channel.name }}<span class="sr-only"> (opens in Slack)</span></a>
-                {% if channel.isExternal %}
-                    {# Slack Connect channel. The badge doesn't shrink, so long names are cut off before it. #}
-                    <span class="shrink-0 rounded border border-purple-200 bg-purple-50 px-1 text-[10px] leading-4 font-medium text-purple-700 uppercase"
-                        title="Slack Connect: shared with another organisation">Ext</span>
-                {% endif %}
-            </div>
-        </td>
-    {% endmacro %}
-
-    {# The channel's purpose. Wraps onto at most 2 lines, then "…"; hover to
-       see it all. Used on both tabs. #}
-    {% macro descriptionCell(channel) %}
-        <td class="hidden px-2 py-3 text-gray-600 sm:px-4 lg:table-cell">
-            <div class="line-clamp-2 break-words" title="{{ channel.purpose }}">{{ channel.purpose }}</div>
-        </td>
-    {% endmacro %}
-
     {# A spinning circle, for things happening in the background. #}
     {% macro spinner() %}
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" class="size-5 shrink-0 animate-spin motion-reduce:animate-none">
@@ -54,15 +11,6 @@
             <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
         </svg>
     {% endmacro %}
-
-    {# Why the dashboard offers to archive a channel. #}
-    {% macro archiveReason(channel) -%}
-        {%- if channel.inactive -%}
-            Nobody has posted in this channel in the last 30 days.
-        {%- else -%}
-            This channel has fewer than 2 members.
-        {%- endif -%}
-    {%- endmacro %}
 
     {% if error %}
         <div class="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
@@ -131,15 +79,10 @@
         </div>
 
         {# Searches channel names. Works by pressing Enter; with JavaScript
-           (search.js), the results also update as you type. Keeps the tab and
-           sort, and goes back to page 1. #}
+           (search.js), the results also update as you type. Keeps the tab. #}
         <form method="get" action="/" role="search" class="mt-4" data-channel-search>
             {% if status == 'archived' %}
                 <input type="hidden" name="status" value="archived">
-            {% endif %}
-            {% if sort != 'name' or dir != 'asc' %}
-                <input type="hidden" name="sort" value="{{ sort }}">
-                <input type="hidden" name="dir" value="{{ dir }}">
             {% endif %}
             <label for="channel-search" class="sr-only">Search channel names</label>
             <div class="relative w-full sm:max-w-sm">
@@ -157,170 +100,39 @@
            updates the results. Outside the results, so it stays on the page. #}
         <p id="search-status" class="sr-only" aria-live="polite"></p>
 
-        {# Archives the ticked channels together. The checkboxes are in the
-           table, linked to this form by their `form` attribute. bulk-archive.js
-           shows this once a channel is ticked, and asks to confirm first.
-           Outside the results, as search.js replaces those. #}
+        {# Archives the channels ticked in the grid together. bulk-archive.js
+           adds their IDs, shows this once a channel is ticked, and asks to
+           confirm first. Outside the results, as search.js replaces those. #}
         <form id="bulk-archive-form" method="post" action="/channels/archive" hidden
             class="mt-4 flex items-center justify-between gap-3 rounded-md border border-gray-200 bg-white px-4 py-2 text-sm shadow-sm">
             <p><span data-bulk-count></span> selected</p>
+            <div data-bulk-ids hidden></div>
             <button type="button" data-bulk-open
                 class="cursor-pointer rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900">Archive selected</button>
         </form>
 
-        {# Everything search.js replaces when the results change. #}
+        {# Everything search.js replaces when the results change: the channels
+           for the grid, and the message when there are none. #}
         <div id="channel-results">
         {% if q %}
-            <p id="search-summary" class="sr-only">{{ pagination.total }} {{ 'channel' if pagination.total == 1 else 'channels' }} found</p>
+            <p id="search-summary" class="sr-only">{{ total }} {{ 'channel' if total == 1 else 'channels' }} found</p>
         {% endif %}
-        <div class="mt-4 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-            {# Fixed column widths (set on the header cells), so the columns stay
-               the same size whatever is on the page. Description takes the space
-               left over. Less important columns are hidden on smaller screens,
-               so the table never scrolls sideways. #}
-            {% set archivedTab = status == 'archived' %}
-            <table class="w-full table-fixed divide-y divide-gray-200 text-sm">
-                <thead class="bg-gray-50 text-left font-medium text-gray-600">
-                    <tr>
-                        {# Name is wider on the Archived tab, which has fewer columns. #}
-                        {% if archivedTab %}
-                            {{ sortHeader('Name', sortLinks.name, 'w-[50%] px-2 py-3 sm:w-[40%] sm:px-4 lg:w-80') }}
-                            <th scope="col" class="hidden px-2 py-3 sm:px-4 lg:table-cell">Description</th>
-                            {{ sortHeader('Archived', sortLinks.archived, 'w-28 px-2 py-3 sm:px-4') }}
-                        {% else %}
-                            {# Ticks every channel on this page that can be archived
-                               (bulk-archive.js). Hidden on phones, where there's no room. #}
-                            <th scope="col" class="hidden w-10 py-3 pr-0 pl-2 sm:table-cell sm:pl-4">
-                                <input type="checkbox" data-select-all
-                                    aria-label="Select all channels on this page that can be archived"
-                                    {% if not (channels | selectattr('canArchive') | length) %}disabled{% endif %}
-                                    class="size-4 cursor-pointer accent-gray-900 disabled:cursor-default">
-                            </th>
-                            {{ sortHeader('Name', sortLinks.name, 'w-[40%] px-2 py-3 sm:w-[30%] sm:px-4 lg:w-56') }}
-                            {{ sortHeader('Members', sortLinks.members, 'hidden w-24 px-2 py-3 text-right sm:px-4 md:table-cell') }}
-                            <th scope="col" class="hidden px-2 py-3 sm:px-4 lg:table-cell">Description</th>
-                            {{ sortHeader('Shared with', sortLinks.sharedWith, 'hidden w-36 px-2 py-3 sm:px-4 xl:table-cell') }}
-                            {# Hidden on phones to leave room for the Archive button. #}
-                            {{ sortHeader('Last message', sortLinks.lastMessage, 'hidden w-32 px-2 py-3 sm:table-cell sm:px-4') }}
-                            {{ sortHeader('Messages (30 days)', sortLinks.messages, 'hidden w-32 px-2 py-3 text-right sm:px-4 md:table-cell') }}
-                            {{ sortHeader('Status', sortLinks.status, 'w-28 px-2 py-3 sm:px-4') }}
-                            {{ sortHeader('Archive recommended', sortLinks.archive, 'w-28 px-2 py-3 sm:w-36 sm:px-4') }}
-                        {% endif %}
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200">
-                    {% for channel in channels %}
-                        <tr>
-                            {% if archivedTab %}
-                                {{ nameCell(channel) }}
-                                {{ descriptionCell(channel) }}
-                                <td class="px-2 py-3 whitespace-nowrap text-gray-600 sm:px-4">
-                                    {% if channel.archivedAt %}
-                                        {{ channel.archivedAt.toLocaleDateString('en-GB', {timeZone: 'Europe/London'}) }}
-                                    {% else %}
-                                        —
-                                    {% endif %}
-                                </td>
-                            {% else %}
-                                <td class="hidden py-3 pr-0 pl-2 sm:table-cell sm:pl-4">
-                                    {% if channel.canArchive %}
-                                        <input type="checkbox" name="ids" value="{{ channel.id }}" form="bulk-archive-form"
-                                            data-bulk-select data-name="{{ channel.name }}"
-                                            aria-label="Select #{{ channel.name }}"
-                                            class="size-4 cursor-pointer accent-gray-900">
-                                    {% endif %}
-                                </td>
-                                {{ nameCell(channel) }}
-                                <td class="hidden px-2 py-3 text-right tabular-nums sm:px-4 md:table-cell">{{ channel.memberCount }}</td>
-                                {{ descriptionCell(channel) }}
-                                {# Other organisations in a Slack Connect channel. #}
-                                <td class="hidden px-2 py-3 text-gray-600 sm:px-4 xl:table-cell">
-                                    {% if channel.externalTeams | length %}
-                                        <div class="line-clamp-2 break-words" title="{{ channel.externalTeams | join(', ') }}">{{ channel.externalTeams | join(', ') }}</div>
-                                    {% endif %}
-                                </td>
-                                <td class="hidden px-2 py-3 whitespace-nowrap text-gray-600 sm:table-cell sm:px-4">
-                                    {% if not channel.activity %}
-                                        —
-                                    {% elif channel.activity.lastMessageAt %}
-                                        {{ channel.activity.lastMessageAt.toLocaleDateString('en-GB', {timeZone: 'Europe/London'}) }}
-                                    {% else %}
-                                        No messages
-                                    {% endif %}
-                                </td>
-                                <td class="hidden px-2 py-3 text-right tabular-nums sm:px-4 md:table-cell">
-                                    {% if not channel.activity %}
-                                        —
-                                    {% elif channel.activity.messagesLastMonth >= 100 %}
-                                        100+
-                                    {% else %}
-                                        {{ channel.activity.messagesLastMonth }}
-                                    {% endif %}
-                                </td>
-                                <td class="px-2 py-3 whitespace-nowrap sm:px-4">
-                                    {# Nobody in it (not counting the bot): shown over every other status. #}
-                                    {% if channel.memberCount == 0 %}
-                                        <span class="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-800"
-                                            title="This channel has no members">Empty</span>
-                                    {% elif channel.inactive %}
-                                        <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Inactive</span>
-                                    {% elif channel.activity %}
-                                        <span class="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800">Active</span>
-                                    {% elif not channel.isMember %}
-                                        {# The bot can only read channels it's in, so their activity is unknown. #}
-                                        <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
-                                            title="The bot isn't in this channel, so it can't see the messages">Unknown</span>
-                                    {% else %}
-                                        <span class="text-xs text-gray-500">Not checked yet</span>
-                                    {% endif %}
-                                </td>
-                                <td class="px-2 py-3 text-right sm:px-4">
-                                    {# Only for quiet channels that are ours to archive. Asks to
-                                       confirm first, in a modal (archive-dialog.js). #}
-                                    {% if channel.canArchive %}
-                                        <button type="button"
-                                            data-archive-url="/channels/{{ channel.id }}/archive"
-                                            data-archive-name="{{ channel.name }}"
-                                            data-archive-reason="{{ archiveReason(channel) }}"
-                                            class="inline-block cursor-pointer rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900">Archive<span class="sr-only"> #{{ channel.name }}</span></button>
-                                    {% endif %}
-                                </td>
-                            {% endif %}
-                        </tr>
-                    {% else %}
-                        <tr>
-                            <td colspan="{{ 3 if archivedTab else 9 }}" class="px-4 py-6 text-center text-gray-500">
-                                {% if q %}No {{ status }} channels match “{{ q }}”.{% else %}No {{ status }} channels.{% endif %}
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        {# The grid's rows, as JSON. Escaped by the route, so it's safe here. #}
+        <script type="application/json" id="channel-data">{{ rowsJson | safe }}</script>
+        {% if total == 0 %}
+            <p class="mt-4 rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500 shadow-sm">
+                {% if q %}No {{ status }} channels match “{{ q }}”.{% else %}No {{ status }} channels.{% endif %}
+            </p>
+        {% endif %}
         </div>
 
-        {% if pagination.total > 0 %}
-            {% set linkClass = 'rounded-md border border-gray-300 bg-white px-3 py-1.5 font-medium hover:bg-gray-100 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900' %}
-            {% set disabledClass = 'rounded-md border border-gray-200 px-3 py-1.5 font-medium text-gray-400' %}
-            <nav aria-label="Pagination" class="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm">
-                <p class="text-gray-600">
-                    Showing {{ pagination.from }}–{{ pagination.to }} of {{ pagination.total }} channels
-                </p>
-                <div class="flex items-center gap-2">
-                    {% if pagination.previousUrl %}
-                        <a href="{{ pagination.previousUrl }}" rel="prev" class="{{ linkClass }}">Previous</a>
-                    {% else %}
-                        <span class="{{ disabledClass }}" aria-disabled="true">Previous</span>
-                    {% endif %}
-                    <span class="px-2 text-gray-600">Page {{ pagination.page }} of {{ pagination.totalPages }}</span>
-                    {% if pagination.nextUrl %}
-                        <a href="{{ pagination.nextUrl }}" rel="next" class="{{ linkClass }}">Next</a>
-                    {% else %}
-                        <span class="{{ disabledClass }}" aria-disabled="true">Next</span>
-                    {% endif %}
-                </div>
-            </nav>
-        {% endif %}
-        </div>
+        {# The channels table, made by channel-grid.js using AG Grid, which
+           sorts it and pages through it. Outside the results, so search.js
+           doesn't replace it; channel-grid.js updates it instead. #}
+        <div id="channel-grid" data-status="{{ status }}" class="mt-4"></div>
+        <noscript>
+            <p class="mt-4 text-sm text-gray-600">Turn on JavaScript to see the channels.</p>
+        </noscript>
 
         {# Asks to confirm archiving a channel. archive-dialog.js fills in the
            channel and opens it when an Archive button is clicked. Outside the
@@ -360,7 +172,7 @@
                 Each channel is checked with Slack first, and skipped if it no longer qualifies. This takes a few seconds per channel.
             </p>
             <div class="mt-6 flex items-center gap-3">
-                {# Sends the selection bar's form, with the ticked checkboxes. #}
+                {# Sends the selection bar's form, with the ticked channels' IDs. #}
                 <button form="bulk-archive-form" class="cursor-pointer rounded-md bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900">
                     Archive channels
                 </button>
@@ -377,6 +189,12 @@
 {% endblock %}
 
 {% block scripts %}
+    {# AG Grid, for the channels grid (channel-grid.js). The integrity hash
+       makes sure the CDN sends exactly this version. #}
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@36.2.0/dist/ag-grid-community.min.js"
+      integrity="sha384-icvtRKM0YJJgeDhXnWY8UlF1PVBFd4K8Pj61la+vG+EU+awBeoP0xGPZhCD2SQOV"
+      crossorigin="anonymous"></script>
+    <script type="module" src="/channel-grid.js"></script>
     <script src="/search.js"></script>
     <script src="/archive-dialog.js"></script>
     <script src="/bulk-archive.js"></script>
