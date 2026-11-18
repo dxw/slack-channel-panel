@@ -469,13 +469,13 @@ describe('archiving several channels', () => {
 		assert.ok(html.includes('Select at least one channel to archive.'));
 	});
 
-	it('refuses more than 25 channels', async () => {
+	it('refuses more than 100 channels', async () => {
 		const body = new URLSearchParams(
-			Array.from({length: 26}, (_, i) => ['ids', `CZ${i}`]),
+			Array.from({length: 101}, (_, i) => ['ids', `C${i}`]),
 		);
 		await post('/channels/archive', {body, cookie});
 
 		const html = await (await get('/', cookie)).text();
-		assert.ok(html.includes('You can archive at most 25 channels at a time.'));
+		assert.ok(html.includes('You can archive at most 100 channels at a time.'));
 	});
 });

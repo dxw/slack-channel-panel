@@ -420,10 +420,10 @@ describe('startBulkArchive', () => {
 		await waitForBulkArchive();
 	});
 
-	it('refuses no channels, or more than 25', () => {
+	it('refuses no channels, or more than 100', () => {
 		assert.throws(() => start([]), RangeError);
 		assert.throws(
-			() => start(Array.from({length: 26}, (_, i) => `C${i}`)),
+			() => start(Array.from({length: 101}, (_, i) => `C${i}`)),
 			RangeError,
 		);
 	});
