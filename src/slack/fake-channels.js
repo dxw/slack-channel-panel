@@ -115,7 +115,8 @@ export const fakeMessages = Object.fromEntries(
 	fakeChannels.map((channel, i) => {
 		const messages =
 			{
-				// Active only because a bot posts in it.
+				// Mostly bot posts, which don't count: active because of a
+				// person's message 40 days ago.
 				'ops-alerts': [botPost(0.1), botPost(1), joined(2), personPost(40)],
 				// Inactive: last message over 6 months ago.
 				'book-club': [joined(1), personPost(200)],
