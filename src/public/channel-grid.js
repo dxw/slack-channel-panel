@@ -192,7 +192,8 @@ const COLUMNS = {
 		sortable('members', {
 			headerName: 'Members',
 			field: 'memberCount',
-			type: 'rightAligned',
+			// Numbers on the right; the heading stays on the left, like the others.
+			cellClass: 'ag-right-aligned-cell',
 			width: 110,
 		}),
 		descriptionColumn,
@@ -211,7 +212,7 @@ const COLUMNS = {
 			headerName: 'Messages (6 months)',
 			headerComponentParams: {innerHeaderComponent: TwoLineHeader},
 			field: 'messages',
-			type: 'rightAligned',
+			cellClass: 'ag-right-aligned-cell',
 			width: 130,
 		}),
 		sortable('status', {
