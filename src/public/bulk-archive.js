@@ -17,8 +17,8 @@ if (bulkForm && bulkDialog) {
 	/** @type {{id: string, name: string}[]} */
 	let selected = [];
 
-	// channel-grid.js: the ticked channels have changed, including when
-	// searching removes some.
+	// channel-grid.js sends this whenever the ticked channels change: when you
+	// tick or untick one, and when searching or filtering hides some.
 	document.addEventListener('channels:selection', (event) => {
 		selected = event.detail;
 		bulkForm.hidden = selected.length === 0;
