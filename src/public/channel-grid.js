@@ -421,7 +421,7 @@ const COLUMNS = {
 
 /** The smallest screen each column is shown on. Others are always shown. */
 const SHOWN_FROM = {
-	lastMessage: 'sm',
+	lastMessage: 'lg',
 	members: 'md',
 	messages: 'md',
 	description: 'lg',
