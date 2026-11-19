@@ -80,7 +80,8 @@
 
         {# Searches channel names. Works by pressing Enter; with JavaScript
            (search.js), the results also update as you type. Keeps the tab. #}
-        <form method="get" action="/" role="search" class="mt-4" data-channel-search>
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <form method="get" action="/" role="search" class="w-full sm:w-auto sm:flex-1" data-channel-search>
             {% if status == 'archived' %}
                 <input type="hidden" name="status" value="archived">
             {% endif %}
@@ -96,6 +97,9 @@
                     class="w-full rounded-md border border-gray-300 bg-white py-2 pr-3 pl-9 text-sm placeholder:text-gray-400 focus:border-gray-900 focus:outline-2 focus:outline-offset-0 focus:outline-gray-900">
             </div>
         </form>
+        <button type="button" data-export-csv hidden
+            class="cursor-pointer rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-2 focus:outline-offset-2 focus:outline-gray-900">Download CSV</button>
+        </div>
         {# Tells screen reader users how many channels match, after search.js
            updates the results. Outside the results, so it stays on the page. #}
         <p id="search-status" class="sr-only" aria-live="polite"></p>

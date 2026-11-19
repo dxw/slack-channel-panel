@@ -5,6 +5,7 @@
 /* global agGrid */
 
 import {SORT_COLUMNS, compareRows} from './channel-sorting.js';
+import {csvValue, csvFileName} from './channel-export.js';
 
 // Tailwind's breakpoints. Less important columns are hidden on smaller
 // screens, so the table never scrolls sideways.
@@ -515,7 +516,42 @@ if (container) {
 		},
 	});
 
-	container.hidden = rows.length === 0;
+	// Downloads the channels that match the search and filters, from every
+	// page, in the order they're sorted.
+	const exportButton = document.querySelector('[data-export-csv]');
+	/** @param {boolean} hidden */
+	const hideGrid = (hidden) => {
+		container.hidden = hidden;
+		if (exportButton) {
+			exportButton.hidden = hidden;
+		}
+	};
+	hideGrid(rows.length === 0);
+
+	/**
+	 * A cell's value in the CSV: what's shown in the table, as text.
+	 * @param {string} colId
+	 * @param {unknown} value
+	 */
+	const exportValue = (colId, value) => {
+		if (colId === 'status') {
+			return STATUSES[value]?.label ?? value;
+		}
+		if (colId === 'archive') {
+			return value ? 'Yes' : 'No';
+		}
+		return value;
+	};
+
+	exportButton?.addEventListener('click', () => {
+		api.exportDataAsCsv({
+			fileName: csvFileName(status, new Date()),
+			// Includes the columns hidden on smaller screens.
+			allColumns: true,
+			processCellCallback: ({column, value}) =>
+				csvValue(exportValue(column.getColId(), value)),
+		});
+	});
 
 	// Shows or hides columns to fit the screen.
 	for (const [colId, breakpoint] of Object.entries(SHOWN_FROM)) {
@@ -534,6 +570,6 @@ if (container) {
 		const updated = readRows();
 		api.setGridOption('rowData', updated);
 		api.paginationGoToFirstPage();
-		container.hidden = updated.length === 0;
+		hideGrid(updated.length === 0);
 	});
 }
