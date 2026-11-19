@@ -37,9 +37,12 @@ const data = {
 	activity: new Map([
 		[
 			'C1',
-			{lastMessageAt: new Date('2026-11-09T12:00:00Z'), messagesLastMonth: 3},
+			{
+				lastMessageAt: new Date('2026-11-09T12:00:00Z'),
+				messagesLastSixMonths: 3,
+			},
 		],
-		['C3', {lastMessageAt: null, messagesLastMonth: 0}],
+		['C3', {lastMessageAt: null, messagesLastSixMonths: 0}],
 	]),
 	teamNames: new Map([['T_THEIRS', 'Partner Co']]),
 	ownTeamId: 'T_OURS',

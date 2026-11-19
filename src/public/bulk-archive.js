@@ -1,6 +1,6 @@
-// Lets you tick channels that can be archived, or all of them on the page,
-// then archive them together after confirming in a modal. Without this
-// script, the checkboxes do nothing.
+// Archives the channels ticked in the grid together, after confirming in a
+// modal. channel-grid.js says which are ticked; this puts their IDs in the
+// form, and shows the selection bar while any are ticked.
 
 // Named so they don't clash with search.js's and archive-dialog.js's, as
 // scripts on a page share their top-level names.
@@ -9,63 +9,53 @@ const bulkDialog = document.getElementById('bulk-archive-dialog');
 
 if (bulkForm && bulkDialog) {
 	const count = bulkForm.querySelector('[data-bulk-count]');
-
-	/**
-	 * The channels' checkboxes. Looked up each time, as search.js replaces the
-	 * table as you search.
-	 * @returns {HTMLInputElement[]}
-	 */
-	const checkboxes = () => [
-		...document.querySelectorAll('input[data-bulk-select]'),
-	];
-	const ticked = () => checkboxes().filter((checkbox) => checkbox.checked);
+	const ids = bulkForm.querySelector('[data-bulk-ids]');
+	// The most channels that can be archived at once, from the server
+	// (MAX_BULK_ARCHIVE in slack/index.js).
+	const maxBulkArchive = Number(bulkForm.dataset.max);
 
 	/** @param {number} n */
 	const channels = (n) => `${n} ${n === 1 ? 'channel' : 'channels'}`;
 
-	/** Shows the selection bar if anything is ticked, and updates "select all" to match. */
-	const update = () => {
-		const total = checkboxes().length;
-		const n = ticked().length;
-		bulkForm.hidden = n === 0;
-		count.textContent = channels(n);
+	/** @type {{id: string, name: string}[]} */
+	let selected = [];
 
-		const selectAll = document.querySelector('[data-select-all]');
-		if (selectAll) {
-			selectAll.checked = n > 0 && n === total;
-			// Shows as a dash when only some are ticked.
-			selectAll.indeterminate = n > 0 && n < total;
-		}
-	};
+	// channel-grid.js sends this whenever the ticked channels change: when you
+	// tick or untick one, and when searching or filtering hides some.
+	document.addEventListener('channels:selection', (event) => {
+		selected = event.detail;
+		bulkForm.hidden = selected.length === 0;
+		count.textContent = channels(selected.length);
 
-	// Listens on the whole page, as search.js replaces the checkboxes.
-	document.addEventListener('change', (event) => {
-		if (event.target.matches('[data-select-all]')) {
-			for (const checkbox of checkboxes()) {
-				checkbox.checked = event.target.checked;
-			}
-		}
-		if (event.target.matches('[data-select-all], [data-bulk-select]')) {
-			update();
-		}
+		const overLimit = selected.length > maxBulkArchive;
+		const openButton = bulkForm.querySelector('[data-bulk-open]');
+		openButton.disabled = overLimit;
+		openButton.textContent = overLimit
+			? `Select at most ${maxBulkArchive} channels`
+			: 'Archive selected';
+
+		ids.replaceChildren(
+			...selected.map(({id}) =>
+				Object.assign(document.createElement('input'), {
+					type: 'hidden',
+					name: 'ids',
+					value: id,
+				}),
+			),
+		);
 	});
 
-	// search.js has replaced the table: its checkboxes start unticked.
+	// search.js has changed the channels, so the list in the modal may be out of date.
 	document.addEventListener('channels:updated', () => {
 		bulkDialog.close();
-		update();
 	});
-	// When the page loads, including going back to it, as browsers can
-	// restore ticked checkboxes.
-	window.addEventListener('pageshow', update);
 
 	bulkForm.querySelector('[data-bulk-open]').addEventListener('click', () => {
-		const names = ticked().map((checkbox) => checkbox.dataset.name);
 		bulkDialog.querySelector('[data-bulk-dialog-count]').textContent = channels(
-			names.length,
+			selected.length,
 		);
 		bulkDialog.querySelector('[data-bulk-dialog-list]').replaceChildren(
-			...names.map((name) => {
+			...selected.map(({name}) => {
 				const item = document.createElement('li');
 				item.textContent = `#${name}`;
 				return item;

@@ -26,8 +26,8 @@ const PAUSE_BETWEEN_CHANNELS_MS = 1200;
 // conversations.archive allows about 20 calls a minute, so pause between
 // channels when archiving several at once.
 const PAUSE_BETWEEN_ARCHIVES_MS = 3000;
-/** The most channels that can be archived at once (one page of the dashboard). */
-export const MAX_BULK_ARCHIVE = 25;
+
+export const MAX_BULK_ARCHIVE = 100;
 // Channels younger than this aren't offered for archiving, as they may not
 // have been used yet.
 const NEW_CHANNEL_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
@@ -217,6 +217,11 @@ export const refreshChannels = async ({
 		return;
 	}
 	state.refreshing = true;
+	console.log(
+		joinChannels
+			? 'Data refresh started. The bot will join channels it isn’t in yet.'
+			: 'Data refresh started. The bot won’t join channels it isn’t in (set SLACK_JOIN_CHANNELS=true to let it).',
+	);
 
 	try {
 		const allChannels = await listChannels(token);
