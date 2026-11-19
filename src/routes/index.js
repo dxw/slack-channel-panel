@@ -8,32 +8,22 @@ import {
 	BulkArchiveRunningError,
 	MAX_BULK_ARCHIVE,
 } from '../slack/index.js';
-import {paginate} from '../pagination.js';
-import {SORT_COLUMNS, SORTABLE_ON_TAB, sortChannels} from '../sorting.js';
+import {toGridRow, gridRowsJson} from '../channel-rows.js';
 
 const router = express.Router();
 
-const CHANNELS_PER_PAGE = 25;
-
 /**
  * Builds a homepage link, leaving out anything that's the default,
- * e.g. "/?status=archived&q=project&sort=archived&dir=asc&page=2".
- * @param {{status: string, q?: string, sort: string, dir: string, page?: number}} options
+ * e.g. "/?status=archived&q=project".
+ * @param {{status: string, q?: string}} options
  */
-const homeUrl = ({status, q = '', sort, dir, page = 1}) => {
+const homeUrl = ({status, q = ''}) => {
 	const params = new URLSearchParams();
 	if (status === 'archived') {
 		params.set('status', 'archived');
 	}
 	if (q) {
 		params.set('q', q);
-	}
-	if (sort !== 'name' || dir !== 'asc') {
-		params.set('sort', sort);
-		params.set('dir', dir);
-	}
-	if (page > 1) {
-		params.set('page', String(page));
 	}
 	const query = params.toString();
 	return query ? `/?${query}` : '/';
@@ -42,16 +32,6 @@ const homeUrl = ({status, q = '', sort, dir, page = 1}) => {
 router.get('/', (req, res) => {
 	// Show active channels unless ?status=archived is asked for.
 	const status = req.query.status === 'archived' ? 'archived' : 'active';
-
-	// Sort by name A–Z unless another column this tab can sort by is asked for.
-	const sortable = SORTABLE_ON_TAB[status];
-	const sort = sortable.includes(String(req.query.sort))
-		? String(req.query.sort)
-		: 'name';
-	const dir =
-		req.query.dir === 'asc' || req.query.dir === 'desc'
-			? req.query.dir
-			: SORT_COLUMNS[sort].firstDirection;
 
 	// Search text for channel names. A leading "#" is ignored, so "#dev"
 	// finds the same channels as "dev".
@@ -93,60 +73,24 @@ router.get('/', (req, res) => {
 	const archived = matching.filter((channel) => channel.isArchived);
 	const shown = status === 'archived' ? archived : active;
 
-	const pagination = paginate(
-		sortChannels(shown, sort, dir),
-		req.query.page,
-		CHANNELS_PER_PAGE,
-	);
-
-	// A link for each sortable column heading. Clicking the current column
-	// reverses it; clicking another starts at that column's first direction.
-	// Changing the sort goes back to page 1. Links keep the search.
-	const sortLinks = Object.fromEntries(
-		sortable.map((column) => {
-			const current = column === sort ? dir : null;
-			const nextDir = current
-				? current === 'asc'
-					? 'desc'
-					: 'asc'
-				: SORT_COLUMNS[column].firstDirection;
-			return [
-				column,
-				{url: homeUrl({status, q, sort: column, dir: nextDir}), current},
-			];
-		}),
-	);
-
+	// The grid (public/channel-grid.js) sorts and pages through these.
 	res.render('index', {
 		status,
 		q,
-		sort,
-		dir,
-		// Switching tab keeps the search, but goes back to the default sort,
-		// as the tabs have different columns.
+		// Switching tab keeps the search.
 		tabUrls: {
-			active: homeUrl({status: 'active', q, sort: 'name', dir: 'asc'}),
-			archived: homeUrl({status: 'archived', q, sort: 'name', dir: 'asc'}),
+			active: homeUrl({status: 'active', q}),
+			archived: homeUrl({status: 'archived', q}),
 		},
 		counts: {active: active.length, archived: archived.length},
-		channels: pagination.items,
-		sortLinks,
-		pagination: {
-			...pagination,
-			previousUrl:
-				pagination.page > 1
-					? homeUrl({status, q, sort, dir, page: pagination.page - 1})
-					: null,
-			nextUrl:
-				pagination.page < pagination.totalPages
-					? homeUrl({status, q, sort, dir, page: pagination.page + 1})
-					: null,
-		},
+		total: shown.length,
+		rowsJson: gridRowsJson(shown.map(toGridRow)),
 		refreshedAt,
 		refreshing,
 		notice,
 		bulkArchiving: bulkArchive?.running ? bulkArchive : null,
 		bulkArchiveSummary,
+		maxBulkArchive: MAX_BULK_ARCHIVE,
 	});
 });
 

@@ -2,3 +2,5 @@
 
 /* Make sure Tailwind scans the Nunjucks templates for class names. */
 @source './views';
+/* And the browser scripts, which build the grid's cells. */
+@source './public/*.js';

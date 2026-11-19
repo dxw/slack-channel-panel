@@ -88,7 +88,7 @@ const slackResponses = {
 	},
 	'conversations.history C789': {
 		messages: [
-			{type: 'message', user: 'U1', ts: String(nowSeconds - 30 * DAY_SECONDS)},
+			{type: 'message', user: 'U1', ts: String(nowSeconds - 200 * DAY_SECONDS)},
 		],
 	},
 };
@@ -170,6 +170,25 @@ const login = async (email) => {
 	return {res, cookie};
 };
 
+/**
+ * The rows sent for the channels grid, from the page's #channel-data.
+ * @param {string} html
+ * @returns {any[]}
+ */
+const rowsOf = (html) => {
+	const json = html.match(
+		/<script type="application\/json" id="channel-data">(.*?)<\/script>/s,
+	)?.[1];
+	assert.ok(json, 'The page has no #channel-data');
+	return JSON.parse(json);
+};
+
+/** @param {string} html */
+const namesOf = (html) => rowsOf(html).map((row) => row.name);
+
+/** The grid row for a channel. */
+const rowFor = (html, name) => rowsOf(html).find((row) => row.name === name);
+
 describe('when signed out', () => {
 	it('redirects / to the login page', async () => {
 		const res = await get('/');
@@ -205,8 +224,8 @@ describe('when signed in', () => {
 		const html = await res.text();
 
 		assert.equal(res.status, 200);
-		assert.ok(html.includes('#test-channel'));
-		assert.ok(!html.includes('#old-channel'));
+		assert.ok(namesOf(html).includes('test-channel'));
+		assert.ok(!namesOf(html).includes('old-channel'));
 		assert.ok(html.includes('Sign out'));
 	});
 
@@ -216,20 +235,17 @@ describe('when signed in', () => {
 		// as the page does, so it matches whatever the runner's time zone.
 		const lastMessage = new Date((nowSeconds - DAY_SECONDS) * 1000);
 
-		assert.ok(
-			html.includes(
-				lastMessage.toLocaleDateString('en-GB', {timeZone: 'Europe/London'}),
-			),
+		assert.equal(
+			rowFor(html, 'test-channel').lastMessage,
+			lastMessage.toLocaleDateString('en-GB', {timeZone: 'Europe/London'}),
 		);
 	});
 
-	it('marks channels with no messages in 30 days as inactive', async () => {
+	it('marks channels with no messages in 6 months as inactive', async () => {
 		const html = await (await get('/', cookie)).text();
-		const rowFor = (name) =>
-			html.split('<tr>').find((row) => row.includes(`#${name}`));
 
-		assert.ok(rowFor('quiet-channel').includes('Inactive'));
-		assert.ok(!rowFor('test-channel').includes('Inactive'));
+		assert.equal(rowFor(html, 'quiet-channel').status, 'inactive');
+		assert.equal(rowFor(html, 'test-channel').status, 'active');
 	});
 
 	it('shows archived channels', async () => {
@@ -237,62 +253,24 @@ describe('when signed in', () => {
 		const html = await res.text();
 
 		assert.equal(res.status, 200);
-		assert.ok(html.includes('#old-channel'));
-		assert.ok(!html.includes('#test-channel'));
+		assert.deepEqual(namesOf(html), ['old-channel']);
+		assert.ok(html.includes('data-status="archived"'));
 	});
 });
 
-describe('pagination', () => {
+describe('the channels grid', () => {
 	let cookie;
 
 	before(async () => {
 		({cookie} = await login('test@dxw.com'));
 	});
 
-	it('shows 25 channels per page', async () => {
+	it('sends every channel on the tab, for the grid to sort and page through', async () => {
 		const html = await (await get('/', cookie)).text();
 
-		assert.ok(html.includes('Showing 1–25 of 32 channels'));
-		assert.ok(html.includes('#zz-channel-22'));
-		assert.ok(!html.includes('#zz-channel-23'));
-		assert.ok(html.includes('href="/?page=2"'));
-	});
-
-	it('shows the next page', async () => {
-		const html = await (await get('/?page=2', cookie)).text();
-
-		assert.ok(html.includes('Showing 26–32 of 32 channels'));
-		assert.ok(html.includes('#zz-channel-29'));
-		assert.ok(!html.includes('#test-channel'));
-		assert.ok(html.includes('href="/"'));
-	});
-});
-
-describe('sorting', () => {
-	let cookie;
-
-	before(async () => {
-		({cookie} = await login('test@dxw.com'));
-	});
-
-	it('sorts by name A–Z by default', async () => {
-		const html = await (await get('/', cookie)).text();
-
-		assert.ok(html.indexOf('#quiet-channel') < html.indexOf('#test-channel'));
-	});
-
-	it('sorts by most messages first', async () => {
-		const html = await (await get('/?sort=messages&dir=desc', cookie)).text();
-
-		// #test-channel has 1 message in the last 30 days; #quiet-channel has none.
-		assert.ok(html.indexOf('#test-channel') < html.indexOf('#quiet-channel'));
-		assert.ok(html.includes('aria-sort="descending"'));
-	});
-
-	it('keeps the sort when changing page', async () => {
-		const html = await (await get('/?sort=messages&dir=desc', cookie)).text();
-
-		assert.ok(html.includes('href="/?sort=messages&amp;dir=desc&amp;page=2"'));
+		assert.equal(rowsOf(html).length, 32);
+		assert.ok(html.includes('<div id="channel-grid" data-status="active"'));
+		assert.ok(html.includes('/ag-grid-community@36.2.0/'));
 	});
 });
 
@@ -306,9 +284,8 @@ describe('searching', () => {
 	it('shows only channels whose names match, ignoring case and a leading #', async () => {
 		const html = await (await get('/?q=%23QUIET', cookie)).text();
 
-		assert.ok(html.includes('#quiet-channel'));
-		assert.ok(!html.includes('#test-channel'));
-		assert.ok(html.includes('Showing 1–1 of 1 channels'));
+		assert.deepEqual(namesOf(html), ['quiet-channel']);
+		assert.ok(html.includes('1 channel found'));
 		assert.ok(html.includes('value="#QUIET"'));
 	});
 
@@ -320,17 +297,11 @@ describe('searching', () => {
 		assert.match(html, /Archived\s*<span[^>]*>1<\/span>/);
 	});
 
-	it('keeps the search when sorting and changing page', async () => {
-		const html = await (await get('/?q=zz', cookie)).text();
-
-		assert.ok(html.includes('href="/?q=zz&amp;page=2"'));
-		assert.ok(html.includes('href="/?q=zz&amp;sort=members&amp;dir=desc"'));
-	});
-
 	it('says when nothing matches', async () => {
 		const html = await (await get('/?q=nothing-like-this', cookie)).text();
 
 		assert.ok(html.includes('No active channels match “nothing-like-this”.'));
+		assert.deepEqual(rowsOf(html), []);
 	});
 });
 
@@ -376,13 +347,6 @@ describe('signing out', () => {
 
 describe('archiving a channel', () => {
 	let cookie;
-	// The table row for a channel. Skips everything before the first row, so
-	// a message like "#name archived." above the table isn't mistaken for one.
-	const rowFor = (html, name) =>
-		html
-			.split('<tr>')
-			.slice(1)
-			.find((row) => row.includes(`#${name}`));
 
 	before(async () => {
 		({cookie} = await login('test@dxw.com'));
@@ -403,24 +367,22 @@ describe('archiving a channel', () => {
 	it('offers to archive inactive channels and ones with fewer than 2 members', async () => {
 		const html = await (await get('/', cookie)).text();
 
-		assert.ok(rowFor(html, 'quiet-channel').includes('/channels/C789/archive'));
-		assert.ok(rowFor(html, 'zz-channel-00').includes('/channels/CZ0/archive'));
-		assert.ok(!rowFor(html, 'test-channel').includes('Archive'));
+		assert.equal(rowFor(html, 'quiet-channel').canArchive, true);
+		assert.equal(rowFor(html, 'zz-channel-00').canArchive, true);
+		assert.equal(rowFor(html, 'test-channel').canArchive, false);
 	});
 
 	it('gives the modal what it needs to ask to confirm', async () => {
 		const html = await (await get('/', cookie)).text();
 
 		assert.ok(html.includes('<dialog id="archive-dialog"'));
-		assert.ok(
-			rowFor(html, 'quiet-channel').includes(
-				'data-archive-reason="Nobody has posted in this channel in the last 30 days."',
-			),
+		assert.equal(
+			rowFor(html, 'quiet-channel').archiveReason,
+			'Nobody has posted in this channel in the last 6 months.',
 		);
-		assert.ok(
-			rowFor(html, 'zz-channel-00').includes(
-				'data-archive-reason="This channel has fewer than 2 members."',
-			),
+		assert.equal(
+			rowFor(html, 'zz-channel-00').archiveReason,
+			'This channel has fewer than 2 members.',
 		);
 	});
 
@@ -448,7 +410,7 @@ describe('archiving a channel', () => {
 		assert.ok(!rowFor(active, 'quiet-channel'));
 
 		const archived = await (await get('/?status=archived', cookie)).text();
-		assert.ok(archived.includes('#quiet-channel'));
+		assert.ok(rowFor(archived, 'quiet-channel'));
 	});
 
 	it('shows the message only once', async () => {
@@ -460,11 +422,6 @@ describe('archiving a channel', () => {
 
 describe('archiving several channels', () => {
 	let cookie;
-	const rowFor = (html, name) =>
-		html
-			.split('<tr>')
-			.slice(1)
-			.find((row) => row.includes(`#${name}`));
 
 	before(async () => {
 		({cookie} = await login('test@dxw.com'));
@@ -477,15 +434,13 @@ describe('archiving several channels', () => {
 		await refreshChannels({token: 'xoxb-test', pauseMs: 0});
 	});
 
-	it('has a checkbox for each channel that can be archived', async () => {
+	it('has a form for the channels ticked in the grid', async () => {
 		const html = await (await get('/', cookie)).text();
 
-		assert.ok(
-			rowFor(html, 'quiet-channel').includes('name="ids" value="C789"'),
-		);
-		assert.ok(!rowFor(html, 'test-channel').includes('name="ids"'));
-		assert.ok(html.includes('data-select-all'));
 		assert.ok(html.includes('<form id="bulk-archive-form"'));
+		assert.ok(html.includes('data-bulk-ids'));
+		// The limit, for bulk-archive.js to stop too many being sent.
+		assert.ok(html.includes('data-max="100"'));
 	});
 
 	it('archives the ones that qualify, and shows how it went once', async () => {
@@ -516,13 +471,13 @@ describe('archiving several channels', () => {
 		assert.ok(html.includes('Select at least one channel to archive.'));
 	});
 
-	it('refuses more than 25 channels', async () => {
+	it('refuses more than 100 channels', async () => {
 		const body = new URLSearchParams(
-			Array.from({length: 26}, (_, i) => ['ids', `CZ${i}`]),
+			Array.from({length: 101}, (_, i) => ['ids', `C${i}`]),
 		);
 		await post('/channels/archive', {body, cookie});
 
 		const html = await (await get('/', cookie)).text();
-		assert.ok(html.includes('You can archive at most 25 channels at a time.'));
+		assert.ok(html.includes('You can archive at most 100 channels at a time.'));
 	});
 });
