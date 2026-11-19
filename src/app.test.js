@@ -443,6 +443,12 @@ describe('archiving several channels', () => {
 		assert.ok(html.includes('data-max="100"'));
 	});
 
+	it('has a button to download the grid as CSV, shown by channel-grid.js', async () => {
+		const html = await (await get('/', cookie)).text();
+
+		assert.match(html, /<button type="button" data-export-csv hidden/);
+	});
+
 	it('archives the ones that qualify, and shows how it went once', async () => {
 		const body = new URLSearchParams([
 			['ids', 'C789'],
