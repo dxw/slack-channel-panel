@@ -188,11 +188,14 @@ const numberFilter = (key) => ({
  * @param {Date} cellDate
  */
 const compareDays = (filterDate, cellDate) => {
-	const day = new Date(
-		cellDate.getFullYear(),
-		cellDate.getMonth(),
-		cellDate.getDate(),
-	);
+	const parts = new Intl.DateTimeFormat('en-GB', {
+		timeZone: 'Europe/London',
+		year: 'numeric',
+		month: 'numeric',
+		day: 'numeric',
+	}).formatToParts(cellDate);
+	const part = (type) => Number(parts.find((item) => item.type === type).value);
+	const day = new Date(part('year'), part('month') - 1, part('day'));
 	return day.getTime() - filterDate.getTime();
 };
 
