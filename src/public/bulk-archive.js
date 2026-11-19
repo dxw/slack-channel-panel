@@ -33,9 +33,6 @@ if (bulkForm && bulkDialog) {
 		openButton.textContent = overLimit
 			? `Select at most ${maxBulkArchive} channels`
 			: 'Archive selected';
-		if (overLimit) {
-			bulkDialog.close();
-		}
 
 		ids.replaceChildren(
 			...selected.map(({id}) =>

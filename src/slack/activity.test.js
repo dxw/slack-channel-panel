@@ -26,15 +26,12 @@ describe('isCountedMessage', () => {
 		assert.ok(isCountedMessage(post(1, {subtype: 'thread_broadcast'})));
 	});
 
-	it('ignores messages from bots and apps', () => {
+	it('counts messages from bots and apps', () => {
 		assert.ok(
-			!isCountedMessage(post(1, {subtype: 'bot_message', bot_id: 'B1'})),
+			isCountedMessage(post(1, {subtype: 'bot_message', bot_id: 'B1'})),
 		);
-		assert.ok(!isCountedMessage(post(1, {bot_id: 'B1'})));
-		assert.ok(!isCountedMessage(post(1, {subtype: 'bot_message'})));
-		assert.ok(
-			!isCountedMessage(post(1, {subtype: 'file_share', bot_id: 'B1'})),
-		);
+		assert.ok(isCountedMessage(post(1, {bot_id: 'B1'})));
+		assert.ok(isCountedMessage(post(1, {subtype: 'file_share', bot_id: 'B1'})));
 	});
 
 	it('ignores joins, leaves and topic changes', () => {
@@ -57,7 +54,7 @@ describe('summariseActivity', () => {
 		});
 	});
 
-	it('ignores bot messages and joins', () => {
+	it('counts bot messages but not joins', () => {
 		const activity = summariseActivity(
 			[
 				post(0, {subtype: 'channel_join'}),
@@ -69,31 +66,25 @@ describe('summariseActivity', () => {
 		);
 
 		assert.deepEqual(activity, {
-			lastMessageAt: new Date(now - 2 * DAY_MS),
-			messagesLastSixMonths: 1,
+			lastMessageAt: new Date(now - DAY_MS),
+			messagesLastSixMonths: 2,
 		});
 	});
 
-	it('returns no last message when only bots have posted', () => {
-		assert.deepEqual(
-			summariseActivity(
-				[post(1, {bot_id: 'B1'}), post(3, {bot_id: 'B1'})],
-				now,
-			),
-			{lastMessageAt: null, messagesLastSixMonths: 0},
-		);
-	});
-
-	it('counts a reply to a bot message as the last message, but not the bot message', () => {
+	it('counts a channel only bots post in as active', () => {
 		const activity = summariseActivity(
-			[post(20, {bot_id: 'B1', reply_count: 1, latest_reply: daysAgo(5)})],
+			[
+				post(1, {subtype: 'bot_message', bot_id: 'B1'}),
+				post(3, {bot_id: 'B1'}),
+			],
 			now,
 		);
 
 		assert.deepEqual(activity, {
-			lastMessageAt: new Date(now - 5 * DAY_MS),
-			messagesLastSixMonths: 0,
+			lastMessageAt: new Date(now - DAY_MS),
+			messagesLastSixMonths: 2,
 		});
+		assert.ok(!isInactive(activity, now));
 	});
 
 	it('counts a recent thread reply as the last message', () => {
