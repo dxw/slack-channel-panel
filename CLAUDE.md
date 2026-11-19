@@ -37,7 +37,7 @@ Things that follow from running on Heroku:
 
 **Layers in `src/slack/`:**
 - `api.js` — thin Slack Web API client over `fetch`, with 429/`Retry-After` retry. `toChannel()` maps Slack's conversation objects to the app's `Channel` shape (JSDoc typedef there).
-- `activity.js` — turns messages into `{lastMessageAt, messagesLastMonth}` and decides "inactive" (30 days). Only messages from people/bots count, not Slack system subtypes.
+- `activity.js` — turns messages into `{lastMessageAt, messagesLastSixMonths}` and decides "inactive" (182 days, treated as 6 months). Only messages from people/bots count, not Slack system subtypes.
 - `index.js` — the store, refresh loop, archivability rules (`isArchivable`) and archive actions.
 - `cache.js` — in development only, saves state to `.cache/channels.json` so nodemon restarts don't trigger a multi-minute refresh. Delete the file to force a refresh. `loadCache` returns null for files in an old shape, so change its check if you change what's stored.
 - `fake-channels.js` — data for `SLACK_FAKE_DATA=true`. In fake mode, archiving updates state without calling Slack (`state.fake`).
